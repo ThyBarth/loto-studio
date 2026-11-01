@@ -2481,7 +2481,7 @@ function renderAnalyse() {
     `<circle cx="${x(i).toFixed(1)}" cy="${y(r.solde).toFixed(1)}" r="2.5" fill="${r.solde >= 0 ? "#17a54a" : "#e03424"}"></circle>` +
     `<circle cx="${x(i).toFixed(1)}" cy="${y(r.solde).toFixed(1)}" r="10" fill="transparent" data-t="${r.date} · grille ${r.nums.join(", ")} + ${r.chance}\nGain : ${fmt(r.gain)} € · Solde : ${fmtC(r.solde)}"></circle>`).join("");
   curve.innerHTML =
-    `<h3 style="margin:18px 0 4px; font-size:15px">📒 Évolution du solde (survolez les points)</h3>` +
+    `<h3 style="margin:18px 0 4px; font-size:15px">Évolution du solde (survolez les points)</h3>` +
     `<div style="display:flex; align-items:center; gap:8px">` +
     `<svg viewBox="0 0 ${W} ${H}" style="flex:1; height:130px; max-width:100%; display:block">` +
       `<line x1="${mG}" y1="${y(0).toFixed(1)}" x2="${W - mD + 14}" y2="${y(0).toFixed(1)}" stroke="#c0c8d8" stroke-dasharray="4 4" stroke-width="1"/>` +
