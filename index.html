@@ -1046,6 +1046,23 @@ function showUpdateToast(msg) {
   clearTimeout(updateToastTimer);
   updateToastTimer = setTimeout(() => t.classList.remove("show"), 15000);   /* visible plus longtemps : l'information est actionable (redémarrer) */
 }
+/* diagnostic au démarrage : si le pont de mise à jour est absent, c'est que
+   preload.js n'a pas été remplacé dans le dossier de l'appli -> on le DIT. */
+if (isElectron && !window.updateAPI) setTimeout(() => showUpdateToast("⚠ Mise à jour auto inactive : remplacez aussi preload.js dans le dossier de l'appli"), 8000);
+/* VÉRIFICATION MANUELLE : cliquer sur la version (pied de fenêtre) teste la
+   mise à jour et annonce TOUJOURS le résultat (à jour / téléchargée / impossible). */
+const verEl = document.getElementById("appVersion");
+if (verEl) {
+  verEl.style.cursor = "pointer";
+  verEl.addEventListener("click", async () => {
+    if (!(isElectron && window.updateAPI && window.updateAPI.check)) { showUpdateToast("⚠ Mise à jour auto inactive : remplacez aussi preload.js dans le dossier de l'appli"); return; }
+    showUpdateToast("⏳ Vérification des mises à jour…");
+    const r = await window.updateAPI.check().catch(() => null);
+    if (!r || r.status === "unavailable") showUpdateToast("⚠ Vérification impossible : Internet ou dépôt GitHub injoignable");
+    else if (r.status === "up-to-date") showUpdateToast("✓ Loto Studio est déjà à jour");
+    else showUpdateToast("🆕 Nouvelle version téléchargée : fermez puis rouvrez Loto Studio pour l'appliquer ✓");
+  });
+}
 if (isElectron && window.updateAPI && window.updateAPI.check) {
   window.updateAPI.check().then((r) => {
     if (r && r.status === "update-ready") showUpdateToast("🆕 Nouvelle version téléchargée : fermez puis rouvrez Loto Studio pour l'appliquer ✓");
@@ -2632,6 +2649,6 @@ document.getElementById("year").textContent = new Date().getFullYear();
 
 <div id="printZone"></div>
 
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" nonce="EFr15213tQELFrfWDU2TbQ==" data-cf-beacon='{"version":"2024.11.0","token":"36b4216ae2dc4d5488c249161e71fe1e","spa":2}' crossorigin="anonymous"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" nonce="JxRkwK85l0zV8sFzJLE8dg==" data-cf-beacon='{"version":"2024.11.0","token":"36b4216ae2dc4d5488c249161e71fe1e","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
