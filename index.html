@@ -1,0 +1,2637 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Loto Studio</title>
+<style>
+  /* ===== ANTI-FLASH (CSS pur, aucun effet sur les couleurs du texte) =====
+     Le fond de la racine est peint en même temps que la feuille de style,
+     AVANT le rendu du contenu : les zones repeintes en retard pendant
+     l'agrandissement de la fenêtre prennent la couleur du thème au lieu du blanc. */
+  html { background: #eef3f9; }
+  html:has(body.dark) { background: #101722; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    background: #eef3f9; color: #1a1a1a; overflow-x: hidden;
+    display: flex; align-items: stretch; justify-content: center;
+  }
+    .window {
+    width: 100%; max-width: 100%; height: 100vh; margin: 0; border-radius: 0; overflow: hidden;
+    box-shadow: none; border: none;
+    display: flex; flex-direction: column;
+  }
+  .window > .content { flex: 1; overflow-y: auto; overflow-x: hidden; }   /* aucun scroll horizontal, quoi qu'il arrive */
+    .titlebar {
+    background: rgba(20,30,50,.85); color: #fff; display: flex; align-items: center;
+    padding-left: 14px; padding-right: 150px; height: 44px; font-size: 13px; font-weight: 600;
+    -webkit-app-region: drag;
+  }
+    .titlebar .app-icon {
+    width: 20px; height: 20px; border-radius: 50%; flex: none;
+    background: radial-gradient(circle at 32% 28%, #5fb3ff 0%, #2f7fd1 45%, #14549c 100%);
+    box-shadow: 0 1px 3px rgba(0,0,0,.4), inset 0 1px 2px rgba(255,255,255,.5);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #fff; line-height: 1;
+  }
+  .tabs {
+    background: rgba(243,246,251,.92); padding: 4px 14px; display: flex; gap: 4px;
+    border-bottom: 1px solid rgba(0,0,0,.06); flex-wrap: wrap;
+    justify-content: center;
+  }
+  .tab {
+    font-family: inherit; font-size: 13.5px; padding: 9px 16px; border: none;
+    cursor: pointer; border-radius: 6px; background: transparent; display: flex;
+    align-items: center; gap: 7px;
+  }
+  .tab.active { background: rgba(255,255,255,.9); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .content { background: linear-gradient(180deg,#f6f4f2,#eef3f9); padding: 20px; min-height: 420px; }
+  .card {
+    background: rgba(255,255,255,.78); border-radius: 8px; padding: 24px;
+    border: 1px solid rgba(0,0,0,.06); box-shadow: 0 2px 6px rgba(0,0,0,.08); margin-bottom: 16px;
+  }
+  .card h2 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
+  .card .sub { margin: 0 0 18px; color: #5c5c5c; font-size: 13px; }
+  section > .card:last-child { margin-bottom: 0; }   /* CORRECTIF ANTI-SCROLL : la marge de 16px sous la DERNIÈRE carte de chaque onglet débordait de quelques pixels -> barre de défilement visible alors que rien n'était coupé */
+  .btn {
+    background: #0067c0; color: #fff; border: none; border-radius: 4px;
+    padding: 10px 24px; font-family: inherit; font-size: 14px; cursor: pointer;
+    transition: background .15s;
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 6px; height: 40px; line-height: 1;   /* hauteur fixe : les emojis ne décalent plus rien */
+  }
+  .btn:hover:not(:disabled) { background: #1975c5; color: #fff; }   /* texte BLANC sur fond bleu (même boutons secondaires en mode clair) */
+  .btn:disabled { opacity: .55; cursor: default; }
+  /* halo pulsé du bouton 🎫 Ticket, pendant le toast « Éditez un ticket… » (même durée que le toast) */
+  @keyframes ticketGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(0,103,192,.45); } 50% { box-shadow: 0 0 0 10px rgba(0,103,192,0); } }
+  /* mode sombre : halo JAUNE (comme les gains), le bleu reste réservé au mode clair */
+  @keyframes ticketGlowJaune { 0%,100% { box-shadow: 0 0 0 0 rgba(255,212,0,.5); } 50% { box-shadow: 0 0 0 10px rgba(255,212,0,0); } }
+  .btn.ticket-glow { animation: ticketGlow 1.5s ease-in-out infinite; }
+  body.dark .btn.ticket-glow { animation-name: ticketGlowJaune; }
+  .btn.secondary { background: #f0f0f0; color: #1a1a1a; border: 1px solid #d0d0d0; }
+  input, select {
+    border: 1px solid #d0d0d0; border-bottom: 1px solid #8a8a8a; border-radius: 4px;
+    padding: 8px 10px; font-family: inherit; font-size: 14px; outline: none; background: #fff;
+  }
+  input:focus { border-bottom: 2px solid #0067c0; margin-bottom: -1px; }   /* compensation : le contenu ne bouge plus d'1px */
+  /* Menus déroulants de rang : assez larges pour éviter la superposition de texte */
+  td select { width: 100%; min-width: 0; padding: 6px 18px 6px 8px; box-sizing: border-box; font-size: 13px; }
+  table { table-layout: auto; }
+  td select option { white-space: normal; }
+  .ball {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; font-size: 13px; border-radius: 50%;
+    font-weight: 700; color: #fff; flex: none;
+    box-shadow: 0 3px 8px rgba(0,0,0,.25), inset 0 2px 3px rgba(255,255,255,.45);
+    background: linear-gradient(145deg,#42a5f5,#1565c0);
+  }
+  .ball.chance {
+    background: radial-gradient(circle at 32% 28%, #ff7b6b 0%, #e03424 45%, #a31605 100%);
+  }
+  /* ===== BOULES GAGNANTES : halo vert, si la date correspond à un tirage ===== */
+  .ball.winner {
+    outline: 2px solid #ffd400;
+    outline-offset: 0;
+    box-shadow: 0 0 7px 2px rgba(255, 212, 0, .9);
+  }
+  body.dark .ball.winner {
+    outline-color: #ffd400;
+    box-shadow: 0 0 7px 2px rgba(255, 212, 0, .8);
+  }
+  .grid50 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 32px; }   /* interligne compacté : l'onglet Statistiques tient sans scroll */
+  .freq-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .freq-bar { flex: 1; height: 10px; background: #ededed; border-radius: 5px; overflow: hidden; }
+  .freq-fill { height: 100%; background: linear-gradient(90deg,#0067c0,#48b0f8); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: #5c5c5c; font-weight: 500; padding: 10px 12px; border-bottom: 1px solid #eee; }
+  td { padding: 10px 12px; border-bottom: 1px solid #f2f2f2; }
+  .kpi { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpi .card { margin-bottom: 0; padding: 16px 20px; }
+  .kpi .label { font-size: 12px; color: #5c5c5c; }
+  .kpi .value { font-size: 24px; font-weight: 700; }
+  .statusbar {
+    background: rgba(243,246,251,.95); border-top: 1px solid rgba(0,0,0,.06);
+    font-size: 11.5px; color: rgba(26,26,26,.55); display: flex; flex-direction: column;
+    align-items: center; text-align: center; padding: 8px 14px; gap: 2px;
+  }
+  .hidden { display: none; }
+  /* ===== LIENS INTERNES VERS UN AUTRE ONGLET : main uniquement, aucune décoration ===== */
+  .lien-onglet { cursor: pointer; }
+  /* ===== LIEN VERS LE SITE FDJ (Dernier tirage) : simple lien texte, calé à droite ===== */
+  .lien-fdj {
+    color: #0067c0; text-decoration: none; font-size: 13px; font-weight: 400;
+    cursor: pointer; user-select: none; margin: -12px 0 4px;   /* remonte sous la phrase : l'écart 18px de .sub est annulé, il ne reste qu'un petit espace */
+    display: block;
+  }
+  .lien-fdj:hover { text-decoration: none; }
+  body.dark .lien-fdj { color: #48b0f8; }
+  /* variante INLINE : le lien fait partie de la phrase (Mise express), même style, aucun retour à la ligne */
+  .lien-fdj-inline {
+    color: #0067c0; text-decoration: none; font-weight: 400;
+    cursor: pointer; user-select: none; margin: 0;
+  }
+  .lien-fdj-inline:hover { text-decoration: none; }
+  body.dark .lien-fdj-inline { color: #48b0f8; }
+  /* ===== TRANSITION DOUCE ENTRE ONGLETS (7) ===== */
+  .content > section { animation: viewIn .28s ease; }
+  @keyframes viewIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+  /* ===== BOULES ANIMÉES DU GÉNÉRATEUR (8) : pop successif ===== */
+  #genOut .gen-line.fresh .ball { animation: ballPop .45s cubic-bezier(.2,.9,.3,1.35) backwards; }   /* pop UNIQUEMENT à la génération, pas aux validations */
+  #genOut .gen-line.fresh .rec-balls .ball:nth-child(2) { animation-delay: .05s; }
+  #genOut .gen-line.fresh .rec-balls .ball:nth-child(3) { animation-delay: .1s; }
+  #genOut .gen-line.fresh .rec-balls .ball:nth-child(4) { animation-delay: .15s; }
+  #genOut .gen-line.fresh .rec-balls .ball:nth-child(5) { animation-delay: .2s; }
+  #genOut .gen-line.fresh .rec-balls .ball:nth-child(6) { animation-delay: .25s; }
+  @keyframes ballPop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .green { color: #0a7a0a; } .red { color: #c42b1c; }
+  .radios { display: flex; gap: 20px; margin-bottom: 18px; flex-wrap: wrap; font-size: 13px; }
+  .radios label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .radios input { accent-color: #0067c0; }
+  .balls-row { display: flex; align-items: center; gap: 12px; min-height: 60px; transition: filter .2s; }
+  .ball-lg { width: 40px; height: 40px; font-size: 17px; }
+  .ball-md { width: 30px; height: 30px; font-size: 13px; }
+  .ball-sm { width: 30px; height: 30px; font-size: 13px; }
+  .ball-xs { width: 30px; height: 30px; font-size: 13px; }
+  .ball, .ball-lg, .ball-md, .ball-sm, .ball-xs {
+    aspect-ratio: 1 / 1; border-radius: 50%;
+    background: radial-gradient(circle at 32% 28%, #5fb3ff 0%, #2f7fd1 45%, #14549c 100%);
+    box-shadow: 0 3px 8px rgba(0,0,0,.28), inset 0 2px 4px rgba(255,255,255,.5), inset 0 -3px 6px rgba(0,0,20,.35);
+  }
+  /* ===== CHAMPS RONDS DE SAISIE DES NUMÉROS ===== */
+  .ball-input {
+    width: 42px; height: 42px; border-radius: 50%; text-align: center;
+    font-size: 15px; font-weight: 700; padding: 0;
+    background: #fff; color: #1a1a1a;
+    border: 2px solid #d0d0d0;
+    transition: border-color .15s, box-shadow .15s, background .15s, color .15s;
+  }
+  .ball-input:focus { border-color: #0067c0; box-shadow: 0 0 6px rgba(0,103,192,.45); outline: none; }
+  .ball-input::placeholder { color: #c0c8d8; font-weight: 500; }
+  .ball-input.chance-input { border-color: #e8a49b; color: #c42b1c; }
+  .ball-input.chance-input:focus { border-color: #e03424; box-shadow: 0 0 6px rgba(224,52,36,.45); }
+  .ball-input.chance-input::placeholder { color: #f2c1ba; }
+  /* champ rempli : il prend l'apparence d'une boule */
+  .ball-input.filled {
+    background: linear-gradient(145deg,#42a5f5,#1565c0);
+    color: #fff; border-color: #1565c0;
+    box-shadow: 0 3px 8px rgba(0,0,0,.25), inset 0 2px 3px rgba(255,255,255,.45);
+  }
+  .ball-input.chance-input.filled {
+    background: radial-gradient(circle at 32% 28%, #ff7b6b 0%, #e03424 45%, #a31605 100%);
+    color: #fff; border-color: #a31605;
+  }
+  body.dark .ball-input { background: #1a2436; color: #e8ecf3; border-color: #3a4a66; }
+  body.dark .ball-input:focus { border-color: #48b0f8; }
+  body.dark .ball-input.chance-input { color: #ff9b8d; border-color: #7a4a42; }
+  body.dark .ball-input.chance-input:focus { border-color: #e03424; }
+  body.dark .ball-input.filled { background: linear-gradient(145deg,#42a5f5,#1565c0); color: #fff; border-color: #48b0f8; }
+  /* ===== GRILLE EXPRESS COMPLÈTE : les boules « poppent » comme au Générateur et dans Faites vos jeux ===== */
+  .ball-input.pop { animation: ballPop .45s cubic-bezier(.2,.9,.3,1.35) backwards; }
+  body.dark .ball-input.chance-input.filled { background: radial-gradient(circle at 32% 28%, #ff7b6b 0%, #e03424 45%, #a31605 100%); color: #fff; border-color: #e03424; }
+  /* ===== ICÔNE CALENDRIER (input type=date) : blanche en mode sombre ===== */
+  body.dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);   /* l'icône sombre devient blanche */
+    cursor: pointer;
+  }
+  /* ===== ✍🏻 CRÉATION DE GRILLE : sélecteur inspiré de la FDJ ===== */
+  .create-wrap { display: flex; gap: 40px; flex-wrap: wrap; align-items: stretch; justify-content: center; }
+  /* ===== 2 PANNEAUX KPI : ils englobent chaque rubrique, même bordure que les KPI, même hauteur ===== */
+  .create-panel { border: 1px solid #3a4a66; border-radius: 4px; padding: 14px 16px; display: flex; flex-direction: column; }
+  .create-panel .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    font-size: 13px; font-weight: 600; padding-bottom: 8px; margin-bottom: 12px; border-bottom: 1px solid rgba(0,0,0,.10); }
+  .create-panel .panel-head .head-info { font-size: 12px; font-weight: 500; color: #5c5c5c; }
+  body.dark .create-panel { background: rgba(28,38,56,.55); }
+  body.dark .create-panel .panel-head { border-bottom-color: rgba(255,255,255,.10); }
+  body.dark .create-panel .panel-head .head-info { color: #9fb0c8; }
+  /* ligne du haut : « Nombre de grilles » + pastilles à GAUCHE, bouton Effacer à DROITE */
+  .create-topline { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+  #btnCreateClear { height: 34px; padding: 6px 12px; font-size: 12.5px; }
+  /* prochain tirage au-dessus des lignes Grille 1-5 : hauteur FIGÉE, tient sur une ligne */
+  #createNextDraw { font-size: 12.5px; margin: 0 0 10px; min-height: 18px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* bouton Enregistrer : collé en BAS du panneau (même hauteur que la rangée des boules rouges
+     de l'autre panneau), aligné horizontalement sur la colonne des boules du récapitulatif */
+  #btnCreateSave { margin-top: auto; align-self: center; width: 300px; }   /* largeur FIGÉE : le libellé (1 à 5 mises) ne change plus la taille */
+  .create-grid-zone { flex: none; }
+  .create-grid { display: grid; grid-template-columns: repeat(7, 40px); gap: 8px; justify-content: center; margin-top: 10px; }
+  .create-chance { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+  /* pastilles de grille : « Grille 1 · 0/5 » en colonne verticale, à GAUCHE des boules */
+  .create-board { display: flex; gap: 18px; align-items: flex-start; justify-content: center; margin-top: 8px; }
+  .create-tabs { display: flex; flex-direction: column; align-items: flex-start; flex-wrap: nowrap; gap: 6px; margin-top: 8px; flex: none; width: 152px; }   /* COLONNE verticale À GAUCHE du bloc boules, LARGEUR FIGÉE (152px) : sélectionner 1 à 5 grilles ne décale JAMAIS les boules ni la légende vers la droite */
+  /* largeur FIGÉE : le texte qui change (0/5 -> 5/5 + star) ne décale plus la grille */
+  .create-tabs .pill { width: auto; padding: 0 12px; height: 30px; border-radius: 4px; font-size: 12px; gap: 4px; justify-content: flex-start; white-space: nowrap; box-shadow: none !important; }   /* largeur AUTO : chaque pastille prend la largeur de son texte, toujours sur 1 ligne */
+  .pick-ball {
+    width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 700; cursor: pointer; user-select: none;
+    background: #eaf3fe; color: #1565c0; border: 1px solid #bcd7f5;
+    transition: transform .1s, background .12s, color .12s, box-shadow .12s;
+  }
+  .pick-ball:hover { transform: scale(1.12); }
+  .pick-ball.sel {
+    background: linear-gradient(145deg,#42a5f5,#1565c0); color: #fff; border-color: #1565c0;
+    box-shadow: 0 2px 6px rgba(21,101,192,.45), inset 0 1px 2px rgba(255,255,255,.4);
+    /* plus de scale persistant : la boule cochée agrandie de 5% dépassait d'~1px vers le bas */
+  }
+  .pick-ball.chanceball { background: #fdeceb; color: #c42b1c; border-color: #f0c4bf; }
+  .pick-ball.chanceball.sel {
+    background: radial-gradient(circle at 32% 28%, #ff7b6b 0%, #e03424 45%, #a31605 100%);
+    color: #fff; border-color: #a31605; box-shadow: 0 2px 6px rgba(224,52,36,.45), inset 0 1px 2px rgba(255,255,255,.35);
+  }
+  body.dark .pick-ball { background: #1a2940; color: #7ab8f0; border-color: #2f4a70; }
+  body.dark .pick-ball.sel { background: linear-gradient(145deg,#42a5f5,#1565c0); color: #fff; border-color: #48b0f8; }
+  body.dark .pick-ball.chanceball { background: #33201e; color: #ff9b8d; border-color: #5a3a34; }
+  body.dark .pick-ball.chanceball.sel { background: radial-gradient(circle at 32% 28%, #ff7b6b 0%, #e03424 45%, #a31605 100%); color: #fff; border-color: #e03424; }
+  /* ===== 🔥 CHAUDS / ❄️ FROIDS : lueur subtile sur les 5 numéros les plus sortis et les 5 les plus en retard ===== */
+  #view-creation .pick-ball.hot { outline: 2px solid rgba(255,140,0,.7); outline-offset: 1px; }
+  #view-creation .pick-ball.cold { outline: 2px solid rgba(72,176,248,.75); outline-offset: 1px; }
+  .chf-legend { text-align: center; font-size: 11px; color: #8a8a8a; margin-top: 8px; line-height: 1.4; display: flex; flex-wrap: nowrap; justify-content: center; gap: 2px 10px; }   /* UNE ligne sur GRAND écran uniquement ; 2 lignes forcées dès 1200px et en dessous */
+  .chf-legend span { white-space: nowrap; }   /* jamais coupée au milieu d'une phrase */
+  .create-side { flex: 1; min-width: 360px; max-width: 560px; display: flex; flex-direction: column; }
+  .create-recap { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+  /* ===== (4) VALIDATION : les boules d'une ligne complète « poppent » comme au Générateur ===== */
+  /* l'effet pop ne joue QUE sur la grille qui vient d'être complétée (classe .fresh) */
+  .create-recap .rec-line.complete.fresh .ball { animation: ballPop .45s cubic-bezier(.2,.9,.3,1.35) backwards; }
+  .create-recap .rec-line.complete.fresh .rec-balls .ball:nth-child(2) { animation-delay: .05s; }
+  .create-recap .rec-line.complete.fresh .rec-balls .ball:nth-child(3) { animation-delay: .1s; }
+  .create-recap .rec-line.complete.fresh .rec-balls .ball:nth-child(4) { animation-delay: .15s; }
+  .create-recap .rec-line.complete.fresh .rec-balls .ball:nth-child(5) { animation-delay: .2s; }
+  .create-recap .rec-line.complete.fresh .rec-balls .ball:nth-child(6) { animation-delay: .25s; }
+  .create-recap .rec-line.complete.fresh .rec-balls .ball:nth-child(7) { animation-delay: .3s; }
+  /* ===== (2) 5ቨ NUMÉROS COCHÉS : le libellé « N° Chance » attire l'œil ===== */
+  .chance-hint { color: #e03424 !important; font-weight: 700; animation: chancePulse 1.1s ease-in-out infinite; }
+  /* ===== STABILITÉ DU LIBELLÉ « N° CHANCE » : aucun mouvement possible =====
+     L'ancienne pulsation agrandissait le texte (scale 1.12) : son bas descendait de ~1px
+     à chaque battement -> impression de décalage vers le bas. La nouvelle animation
+     ne joue QUE sur l'opacité : la mise en page ne peut plus bouger d'un seul pixel. */
+  #chanceLabel { height: 16px; line-height: 16px; overflow: visible; }
+  @keyframes chancePulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+  /* une ligne par grille : label + boules côte à côte, passage à la ligne si étroit */
+  .create-recap .rec-line { display: flex; align-items: center; gap: 10px; font-size: 13px; flex-wrap: wrap; min-height: 48px; }
+  .create-recap .rec-line .rec-label { width: 74px; flex: none; }
+  .create-recap .rec-line .rec-balls { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+  .create-recap .rec-line .plus { color: #e03424; font-weight: 700; }
+  .create-recap .rec-line .ball { width: 32px; height: 32px; font-size: 13px; box-shadow: 0 3px 8px rgba(0,0,0,.28), inset 0 2px 4px rgba(255,255,255,.5), inset 0 -3px 6px rgba(0,0,20,.35); }   /* même taille et relief que les boules du Générateur */
+  .create-recap .rec-line.complete .rec-label { color: #0a7a0a; font-weight: 700; }
+  .create-pills { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  /* ===== (10) NUMÉROS CLIQUABLES : détail des sorties ===== */
+  /* ===== STATISTIQUES : boutons de tri des boules bleues ===== */
+  .tri-btn {
+    font-family: inherit; font-size: 12px; padding: 5px 12px; border-radius: 6px;
+    border: 1px solid #d0d0d0; background: #fff; color: #1a1a1a; cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .tri-btn:hover { border-color: #0067c0; }
+  .tri-btn.active { background: #0067c0; border-color: #0067c0; color: #fff; font-weight: 600; }
+  body.dark .tri-btn { background: #1a2436; color: #e8ecf3; border-color: #3a4a66; }
+  body.dark .tri-btn:hover { border-color: #48b0f8; }
+  body.dark .tri-btn.active { background: #0067c0; border-color: #0067c0; color: #fff; }
+  .num-click { cursor: pointer; display: inline-flex; }
+  /* ===== INFOBULLES MAISON (remplacent les title natifs : bordure complète, y compris à droite) ===== */
+  [data-tip] { position: relative; }
+  /* CORRECTIF TRANSPARENCE : au survol d'une boule, transform:scale() crée un
+     contexte d'empilement qui emprisonne le z-index:999 de l'infobulle -> les
+     boules suivantes dans le DOM la recouvraient. On élève l'élément survolé
+     lui-même au-dessus de ses voisines : l'infobulle redevient opaque. */
+  [data-tip]:hover { z-index: 1000; }
+  /* CORRECTIF SUPERPOSITION : le bouton de suppression (❌) est imbriqué dans
+     l'onglet "Grille X" qui porte aussi une infobulle. Au survol du ❌, les deux
+     s'affichaient en même temps et se superposaient -> on masque l'infobulle du
+     conteneur dès qu'un élément enfant doté d'une infobulle est survolé. */
+  [data-tip]:has([data-tip]:hover)::after { opacity: 0; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    display: none;   /* masquée : aucune occupation de l'espace, donc aucun débordement fantôme */
+    position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(calc(-50% + var(--tip-shift, 0px)));
+    background: #10233f; color: #fff;
+    border: 1px solid #48b0f8; border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; font-weight: 500; line-height: 1.4;
+    white-space: normal; width: max-content; max-width: 340px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+    opacity: 0; pointer-events: none; z-index: 999;
+  }
+  [data-tip]:hover::after { display: block; opacity: 1; transform: translateX(calc(-50% + var(--tip-shift, 0px))); }
+  /* mode sombre : fond BEAUCOUP plus sombre que les panneaux -> aucune impression de transparence */
+  body.dark [data-tip]::after { background: #0b1424; border-color: #48b0f8; color: #e8ecf3; box-shadow: 0 8px 22px rgba(0,0,0,.65); font-weight: 600; }
+  .pick-ball[data-tip]::after { white-space: normal; width: max-content; }
+  .num-click:hover { filter: brightness(1.15); transform: scale(1.08); transition: transform .12s, filter .12s; }
+  #numDetail { position: fixed; inset: 0; background: rgba(8,14,24,.55); z-index: 1001; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  #numDetail.open { opacity: 1; pointer-events: auto; }
+  #numDetail .modal { width: 420px; }
+  #numDetail .dates { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  #numDetail .dates span { font-size: 12px; background: rgba(0,103,192,.1); border-radius: 4px; padding: 3px 8px; }
+  body.dark #numDetail .dates span { background: rgba(72,176,248,.14); }
+  /* ===== MONTANTS DES GAINS : vert en clair, jaune vif en sombre ===== */
+  body.dark .gain-cell { color: #ffd400 !important; }   /* jaune vif : ressort sur fond bleu nuit */
+  /* Meilleur gain (Analyse) : vert en clair, jaune vif en sombre */
+  .best-gain { color: #0a7a0a; }
+  body.dark .best-gain { color: #ffd400; }
+  .hist-gain { color: #0a7a0a; font-size: 11px; font-weight: 700; flex: none; margin-left: 6px; white-space: nowrap; }
+  body.dark .hist-gain { color: #ffd400; }   /* jaune vif en mode sombre, comme les gains de l'onglet Mises & Gains */
+  /* ===== INFOBULLES MAISON DE LA COURBE (SVG : les <title> natifs ne sont pas stylables) ===== */
+  #svgTip {
+    position: fixed; display: none; z-index: 1000; pointer-events: none;
+    background: #10233f; color: #fff; border: 1px solid #48b0f8; border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; font-weight: 500; line-height: 1.4;
+    white-space: pre-line; max-width: 340px; box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  }
+  body.dark #svgTip { background: #0b1424; color: #e8ecf3; font-weight: 600; box-shadow: 0 8px 22px rgba(0,0,0,.65); }
+  #anCurve circle[data-t] { cursor: pointer; }   /* zone de survol généreuse : le point est facile à attraper */
+  /* ===== TABLEAU DES MISES : infobulles FLOTTANTES =====
+     Le corps du tableau défile (overflow-y:auto) : il CLIPPE les ::after des
+     infobulles classiques dès qu'elles dépassent le bord (droite ou haut).
+     Dans le tableau, on les remplace par l'infobulle flottante position:fixed,
+     jamais clippée. */
+  .bets-body-wrap [data-tip]:hover::after { display: none; }   /* zone de survol généreuse : le point est facile à attraper */
+  /* ===== HISTORIQUE : infobulle flottante AUSSI (comme le tableau des mises) =====
+     #histList est en colonnes CSS (3 colonnes) : Chromium CLIPPE les infobulles
+     absolues au bord de la COLONNE, même en plein milieu de la fenêtre -> texte coupé.
+     On masque l'infobulle CSS et on affiche la flottante position:fixed, jamais clippée. */
+  #histList [data-tip]:hover::after { display: none; }
+  /* ===== MODALE (prompt() n'est pas supporté par Electron) ===== */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(8,14,24,.55); z-index: 998; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .modal-overlay.open { opacity: 1; pointer-events: auto; }
+  .modal { background: #fff; color: #1b2a41; border-radius: 14px; padding: 24px; width: 340px; max-width: 92vw; box-shadow: 0 20px 60px rgba(0,0,0,.35); border: 1px solid rgba(0,0,0,.06); }
+  body.dark .modal { background: #1a2436; color: #e8ecf3; border-color: #3a4a66; }
+  .modal h3 { margin: 0 0 10px; font-size: 16px; }
+  .modal p { margin: 0 0 16px; font-size: 14px; color: #5c6b82; line-height: 1.5; }
+  body.dark .modal p { color: #c7d3e4; }
+  .modal input { width: 100%; box-sizing: border-box; font-size: 15px; padding: 10px 12px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+  /* ===== PETITS ÉCRANS : pastilles « Répartition des gains » empilées, aucun débordement ===== */
+  @media (max-width: 560px) {
+    .an-bucket { flex-wrap: wrap; }
+    .an-bucket > div:last-child { flex: 1 1 100%; text-align: left; margin-top: 4px; }
+  }
+  /* ===== HISTORIQUE : colonnes responsives (haut en bas) ===== */
+  #histList > div { break-inside: avoid; margin-bottom: 6px; }
+  /* ===== ÉCRANS ÉTROITS : les 2 panneaux du Générateur s'empilent en PLEINE LARGEUR =====
+     Chaque panneau occupe 100% de la largeur et son contenu se replie à l'intérieur :
+     plus aucun débordement possible, quoi qu'il arrive. */
+  @media (max-width: 900px) {
+    #view-gen .create-wrap { gap: 16px; }
+    #view-gen .create-wrap > .create-panel { width: 100%; flex: 1 1 100%; min-width: 0; max-width: none; }   /* pleine largeur, empilés */
+    #view-gen .create-wrap > .create-panel { min-height: min(620px, calc(100vh - 210px)); }   /* CORRECTIF : hauteur STABLE mais ADAPTATIVE — le panneau tient toujours dans la fenêtre (aucun scroll), et les boutons restent calés en bas (margin-top:auto) */
+    #view-tirage .create-wrap > .create-panel { min-height: min(560px, calc(100vh - 210px)); }   /* même correctif adaptatif pour l'onglet Dernier tirage */
+    #genOut .gen-line { gap: 6px 10px; }        /* lignes de grilles compactées */
+    #genOut .btn-valider { width: auto; }   /* bouton « Valider la grille N°X » : compact, calé à DROITE de sa ligne (comme en grand écran), pas en pleine largeur */
+    #btnSave { width: 100%; max-width: 300px; margin-top: 18px; }   /* bouton Enregistrer : même taille que le bouton Ticket + espace net avec la Grille 5 (margin-top:auto vaut 0 quand le panneau est en hauteur libre) */
+    #btnPrint { width: 100%; max-width: 300px; }   /* bouton Ticket : exactement la même taille et le même centrage que le Générateur */
+    /* ===== PETITS ÉCRANS : onglet « Faites vos jeux » =====
+       CORRECTIF : les sélecteurs visaient #view-create (id inexistant -> AUCUNE règle
+       ne s'appliquait, d'où le panneau jamais adapté). Les 2 panneaux s'empilent
+       en pleine largeur, exactement comme le Générateur. */
+    #view-creation .create-wrap { gap: 16px; }
+    #view-creation .create-wrap > .create-panel { width: 100%; flex: 1 1 100%; min-width: 0; max-width: none; }   /* pleine largeur, empilés */
+    #view-creation .create-panel { height: auto; }   /* hauteur libre : pas d'étirement ni de zone vide */
+    #view-creation .create-grid { grid-template-columns: repeat(7, 34px); gap: 5px; }
+    #view-creation .pick-ball { width: 34px; height: 34px; font-size: 12.5px; }
+    #view-creation .create-chance { gap: 5px; margin-top: 6px; }
+    .chf-legend { font-size: 11px; margin-top: 6px; flex-wrap: wrap; }   /* petit écran : la légende passe sur 2 lignes, une phrase par ligne */
+    .chf-legend span { white-space: normal; display: block; width: 100%; }
+    .create-board { gap: 10px; }   /* petit écran : moins d'écart entre pastilles et bloc boules */
+    /* boutons Enregistrer + Ticket : MEME taille et MEME emplacement que le Générateur
+       (centrés, largeur identique, jamais étirés sur toute la largeur du panneau) */
+    #btnCreateSave { margin-top: 18px; width: 100%; max-width: 300px; }   /* même espace au-dessus que #btnSave du Générateur (18px) */
+    #btnCreatePdf { width: 100%; max-width: 300px; }
+  }
+  /* ===== FENÊTRES 901-980 px : « Faites vos jeux » empile AUSSI ses panneaux =====
+     Les largeurs minimales (500px + 320px + écart 24px + marges) ne tiennent pas
+     côte à côte dans cette plage : débordement des boules et du récapitulatif.
+     Même recette d'empilement que le bloc 900px, sélecteur plus fort que les
+     largeurs minimales -> le contenu ne déborde plus, quel que soit l'écran. */
+  @media (max-width: 980px) {
+    #view-creation .create-wrap > .create-panel { width: 100%; flex: 1 1 100%; min-width: 0; max-width: none; }
+    #view-creation .create-panel { height: auto; }
+  }
+  /* ===== ÉCRANS MOYENS (≤1200px) : légende 🔥/❄️ sur 2 lignes (une phrase par ligne) — 1 ligne uniquement sur grand écran ===== */
+  @media (max-width: 1200px) {
+    .chf-legend { flex-wrap: wrap; }
+    .chf-legend span { white-space: normal; display: block; width: 100%; }
+    #view-creation .create-board > div:last-child { margin-left: 16px; }   /* bloc boules+légende légèrement décalé vers la droite : aucun chevauchement avec les pastilles Grille */
+    /* ===== ÉCRANS MOYENS : « Dernier tirage » — empilement géré plus bas dans la feuille,
+       APRÈS les règles PC #dtLeft/#dtRight (à spécificité égale, c'est la DERNIÈRE règle
+       du fichier qui gagne : le bloc 1200px d'origine était placé avant -> écrasé). ===== */
+  }
+  /* ===== PETITS ÉCRANS : rangées du tableau des mises sur 2 lignes ===== */
+  @media (max-width: 760px) {
+    .create-side #createInfo { margin-bottom: 0; }   /* petit écran : l'info reste collée au bouton */
+    #view-mises .card { padding: 12px; margin-bottom: 10px; }   /* blocs fixes compactés */
+    #view-mises .card h2 { font-size: 17px; margin-bottom: 2px; }
+    #view-mises .card .sub { margin-bottom: 8px; }
+    #view-mises .value { font-size: 18px !important; }           /* KPI plus compacts */
+    #view-mises .label { font-size: 11px !important; }
+    #view-mises input { padding: 6px 8px; }
+    #view-mises .ball-input { padding: 0; width: 38px; height: 38px; font-size: 14px; }
+    #view-mises .btn { height: 36px; padding: 8px 14px; font-size: 13px; }
+    .bets-head { display: none; }               /* en-tête inutile en mode compact */
+    .bets-body, .bets-body tbody { display: block; }
+    .bets-body tr { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; padding: 10px 6px; border-bottom: 1px solid #f2f2f2; }
+    .bets-body td { border: none; padding: 0; }
+    .bets-body td:nth-child(1) { grid-column: 1; }          /* date */
+    .bets-body td:nth-child(2) { grid-column: 1 / -1; }      /* boules : ligne entière */
+    .bets-body td:nth-child(3) { display: none; }            /* mise 2,20 € identique partout */
+    .bets-body td:nth-child(4) { grid-column: 1; }           /* menu rang */
+    .bets-body td:nth-child(5) { grid-column: 2; grid-row: 1; align-self: center; }  /* gain */
+    .bets-body td:nth-child(6) { grid-column: 2; grid-row: 3; }  /* corbeille */
+  }
+      /* ===== TOAST ===== */
+  .toast {
+    position: fixed; top: 52px; right: 28px; z-index: 999;   /* EN HAUT à droite, sous la barre de titre (44px) */
+    display: flex; align-items: center; gap: 12px;
+    background: #10233f; color: #fff; padding: 14px 20px;
+    border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+    border: 1px solid rgba(255,255,255,.15);
+    font-size: 14px; font-weight: 500;
+    transform: translateX(120%); opacity: 0;
+    transition: transform .35s cubic-bezier(.2,.9,.3,1.2), opacity .35s;
+    overflow: hidden;
+  }
+  .toast.show { transform: translateX(0); opacity: 1; }
+  .toast .icon {
+    width: 26px; height: 26px; border-radius: 50%; flex: none;
+    background: #0067c0; display: flex; align-items: center; justify-content: center;
+    font-size: 15px; box-shadow: inset 0 1px 2px rgba(255,255,255,.4);
+  }
+  .toast .progress {
+    position: absolute; left: 0; bottom: 0; height: 3px; width: 100%;
+    background: #0067c0; border-radius: 0 0 10px 10px;
+    transform-origin: left;
+  }
+  .toast.show .progress { animation: toastbar 10s linear forwards; }
+  @keyframes toastbar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+  /* ===== TABLEAU MISES (en-tête fixe + corps défilant) ===== */
+  .bets-head, .bets-body { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  .bets-head th {
+    text-align: left; color: #5c5c5c; font-weight: 500; padding: 10px 12px;
+    border-bottom: 1px solid #eee; background: transparent;
+  }
+  .bets-body-wrap {
+    max-height: 260px;   /* recalibré dynamiquement par le JS */
+    overflow-y: auto;
+    overscroll-behavior: contain;   /* le scroll du tableau ne déclenche plus celui de la fenêtre */
+  }
+  .bets-body td { padding: 10px 12px; border-bottom: 1px solid #f2f2f2; }
+  .bets-body select { max-width: 100%; }   /* le menu Rang rétrécit avec sa cellule : plus de scroll horizontal */
+  .bets-body-wrap::-webkit-scrollbar { width: 8px; }
+  .bets-body-wrap::-webkit-scrollbar-thumb { background: #c0c8d8; border-radius: 4px; }
+  .bets-body-wrap::-webkit-scrollbar-thumb:hover { background: #0067c0; }
+    #btnRefresh:disabled { opacity: .65; cursor: default; }
+  #btnRefresh.loading #icoRefresh { display: inline-block; animation: icoSpin 1s linear infinite; }
+  #btnStatsRefresh:disabled { opacity: .65; cursor: default; }
+  #btnStatsRefresh.loading #icoStats { display: inline-block; animation: icoSpin 1s linear infinite; }
+  @keyframes icoSpin { to { transform: rotate(360deg); } }
+  /* ===== STABILITÉ DU COMPTE À REBOURS : chiffres à largeur fixe ===== */
+  #dtStatus { font-variant-numeric: tabular-nums; }   /* chaque chiffre occupe la même largeur : la fin de phrase ne se décale plus */
+  /* ===== GÉNÉRATEUR : 2 PANNEAUX (générer/valider à gauche, validées à droite) ===== */
+  .gen-grid-zone { flex: none; }
+  #view-gen .create-panel { min-height: min(560px, calc(100vh - 210px)); }   /* hauteur adaptative : 560px aérés si la fenêtre est assez HAUTE, sinon le panneau rétrécit pour tenir DANS la fenêtre — plus AUCUN scroll */
+  #genOut { display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 8px; margin-top: 10px; min-height: 60px; flex: 1 0 auto; }   /* CENTRÉ VERTICALEMENT dans l'espace entre les radios et les boutons (le bloc occupe tout l'espace libre, la hauteur du panneau ne bouge pas) ; s'il n'y a pas de place, il prend sa hauteur naturelle */
+  #genOut > span { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.4; color: #8a8a8a; }   /* texte d'attente : centré verticalement et horizontalement */
+  #genOut .gen-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 44px; font-size: 13px; }
+  #genOut .gen-line .gen-label { width: 54px; flex: none; font-size: 12px; font-weight: 600; color: #5c5c5c; }
+  #genOut .gen-line .rec-balls { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+  #genOut .gen-line .ball { width: 32px; height: 32px; font-size: 13px; box-shadow: 0 3px 8px rgba(0,0,0,.28), inset 0 2px 4px rgba(255,255,255,.5), inset 0 -3px 6px rgba(0,0,20,.35); }
+  #genOut .gen-line .plus { color: #e03424; font-weight: 700; }
+  .btn-valider { height: 32px; padding: 0 12px; font-size: 12px; flex: none; margin-left: auto; }   /* bouton « Valider la grille N°X » calé à droite de sa ligne */
+  #genOut .gen-line.valide .gen-label { color: #0a7a0a; }
+  #genOut .gen-line.valide .btn-valider { background: #e6f4e6; border-color: #b7dcb7; color: #0a7a0a; font-weight: 600; }
+  body.dark #genOut .gen-line.valide .btn-valider { background: #1d2e1d; border-color: #2f4a2f; color: #7ee67e; }
+  #genRecap { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  #genRecap .rec-line { display: flex; align-items: center; gap: 10px; font-size: 13px; flex-wrap: wrap; min-height: 48px; }
+  #genRecap .rec-line .rec-label { width: 74px; flex: none; color: #0a7a0a; font-weight: 700; }
+  #genRecap .rec-line .rec-balls { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+  #genRecap .rec-line .ball { width: 32px; height: 32px; font-size: 13px; box-shadow: 0 3px 8px rgba(0,0,0,.28), inset 0 2px 4px rgba(255,255,255,.5), inset 0 -3px 6px rgba(0,0,20,.35); }   /* même taille que les boules du panneau de gauche */
+  #genRecap .rec-line .plus { color: #e03424; font-weight: 700; }
+  #genRecap .rec-line.fresh .ball { animation: ballPop .45s cubic-bezier(.2,.9,.3,1.35) backwards; }   /* pop quand une grille vient d'être validée */
+  #genRecap .rec-line.fresh .rec-balls .ball:nth-child(2) { animation-delay: .05s; }
+  #genRecap .rec-line.fresh .rec-balls .ball:nth-child(3) { animation-delay: .1s; }
+  #genRecap .rec-line.fresh .rec-balls .ball:nth-child(4) { animation-delay: .15s; }
+  #genRecap .rec-line.fresh .rec-balls .ball:nth-child(5) { animation-delay: .2s; }
+  #genRecap .rec-line.fresh .rec-balls .ball:nth-child(6) { animation-delay: .25s; }
+  #genRecap > p { font-size: 12.5px; color: #8a8a8a; margin: 0; min-height: 18px; line-height: 18px; }   /* « Aucune grille validée » */
+  #btnSave { margin-top: auto; align-self: center; width: 300px; }   /* largeur FIGÉE comme le bouton Enregistrer de « Faites vos jeux » */
+  #genInfo { height: 18px; line-height: 18px; }  /* le rappel ne modifie jamais la hauteur */
+  /* ===== FAITES VOS JEUX : hauteur maîtrisée - aucune barre de défilement à la validation =====
+     Le contenu est compacté verticalement (boules, espacements, lignes du récapitulatif)
+     pour que l'onglet entier tienne dans la fenêtre, même avec 5 grilles validées. */
+  #view-creation .create-panel { padding: 12px 14px; }
+  #view-creation .create-panel .panel-head { padding-bottom: 6px; margin-bottom: 8px; }
+  #view-creation .create-grid { grid-template-columns: repeat(7, 38px); gap: 6px; margin-top: 8px; }
+  #view-creation .pick-ball { width: 38px; height: 38px; font-size: 14px; }
+  #view-creation .create-chance { gap: 6px; margin-top: 8px; }
+  #view-creation .create-board { margin-top: 6px; align-items: flex-start; flex-wrap: wrap; }   /* pastilles en colonne à gauche, bloc boules+légende à droite et CALÉ EN HAUTEUR (aucun décalage vers le bas) ; si la fenêtre est trop étroite, le bloc boules passe sous les pastilles au lieu de déborder */
+  /* les boules (bleues + rouges) sont CENTRÉES dans l'espace restant à droite des pastilles */
+  #view-creation .create-board > div:last-child { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }   /* uniquement le BLOC BOULES (dernier enfant) : s'étire et centre les boules à droite des pastilles */
+  #view-creation .create-chance { flex-wrap: wrap; }   /* boules rouges : retournent à la ligne si trop étroit, jamais de débordement */
+  #view-creation .create-recap { gap: 8px; margin-top: 8px; }
+  #view-creation .create-recap .rec-line { min-height: 40px; }
+  #view-creation #btnCreateSave { margin-top: auto; }   /* comme le Générateur (#btnSave) : calé au BAS du panneau, à la même place au px près */
+  #view-creation #btnCreatePdf { margin-top: 8px; }   /* même écart que le bouton PDF du Générateur (#btnPrint : 8px) */
+  /* ===== 🎯 DERNIER TIRAGE : 2 panneaux de même hauteur figée (aucun étirement, aucun scroll) ===== */
+  #view-tirage .create-wrap { gap: 24px; }
+  /* ===== UNIFORMISATION : Générateur et « Faites vos jeux » occupent l'espace EXACTEMENT
+     comme « Dernier tirage » : les 2 panneaux partagent la largeur disponible au lieu
+     d'un panneau gauche figé à la largeur de son contenu. Même recette flex que
+     #dtLeft/#dtRight (gap 24px, bases 420px/340px). Les règles petits écrans
+     (flex: 1 1 100%) restent prioritaires grâce à leur sélecteur plus fort. ===== */
+  #view-gen .create-wrap, #view-creation .create-wrap { gap: 24px; }   /* même écart entre panneaux que Dernier tirage */
+  #view-gen .create-grid-zone { flex: 1 1 420px; min-width: 360px; max-width: 560px; }   /* comme #dtLeft */
+  #view-gen .create-side { flex: 1 1 340px; min-width: 320px; max-width: none; }   /* comme #dtRight : s'étire librement */
+  /* « Faites vos jeux » : panneau « Grilles à remplir » PLUS LARGE que le Récapitulatif.
+     Largeur minimum = celle de son contenu (pastilles Grille X · 5/5 + grille 7x38px :
+     ~500px) -> les boules et les pastilles ne débordent PLUS du cadre, quelle que soit
+     la fenêtre. Le Récapitulatif garde une part plus petite, plafonnée à 520px. */
+  #view-creation .create-grid-zone { flex: 2 1 500px; min-width: 500px; max-width: none; }
+  #view-creation .create-side { flex: 1 1 340px; min-width: 320px; max-width: 520px; }
+  #view-tirage .create-panel { min-height: min(560px, calc(100vh - 210px)); }   /* hauteur adaptative comme le Générateur : tient dans la fenêtre, aucun scroll */
+  #view-tirage #dtLeft { flex: 1 1 420px; min-width: 360px; max-width: 560px; }
+  #view-tirage #dtRight { flex: 1 1 340px; min-width: 320px; }
+  /* ===== ÉCRANS MOYENS (≤1200px) : « Dernier tirage » — le panneau « Gains par rang » passe SOUS le résultat =====
+     Côte à côte, la colonne « Rang » est trop étroite et les libellés sont coupés
+     (« Rang 3 : 4 numéros + N° ... »). Empilés en pleine largeur (comme petits écrans),
+     les libellés sont complets. Grands écrans (>1200px) : inchangés.
+     NB : ce bloc est placé APRÈS les règles PC ci-dessus — à spécificité égale,
+     la dernière règle du fichier gagne (l'ancienne version, placée avant, était écrasée). */
+  @media (max-width: 1200px) {
+    #view-tirage #dtLeft, #view-tirage #dtRight { width: 100%; flex: 1 1 100%; min-width: 0; max-width: none; }
+    /* ===== ÉCRANS MOYENS : « Faites vos jeux » — le panneau « Récapitulatif » passe SOUS les grilles =====
+       Même correctif que Dernier tirage : les sélecteurs #view-creation .create-grid-zone/.create-side
+       (règles PC ci-dessus, placées plus haut mais plus tard dans le fichier) écrasaient les
+       anciens blocs 900/980px. Ici on les surcharge APRÈS, à sélecteur de même force. */
+    #view-creation .create-grid-zone, #view-creation .create-side { width: 100%; flex: 1 1 100%; min-width: 0; max-width: none; }
+    #view-creation .create-panel { height: auto; }
+    /* ===== ÉCRANS MOYENS : « Générateur » — les 2 panneaux à LA MÊME LARGEUR (pleine largeur) =====
+       CORRECTIF : le panneau gauche porte la classe .gen-grid-zone (PAS .create-grid-zone,
+       classe inexistante ici -> l'ancienne règle ne s'appliquait à rien). */
+    #view-gen .gen-grid-zone, #view-gen .create-side { width: 100%; flex: 1 1 100%; min-width: 0; max-width: none; }
+  }
+  /* zone du compte à rebours : hauteur FIGÉE réservée d'avance -> la phrase du jour de
+     tirage n'occasionne AUCUN décalage quand elle apparaît ou change */
+  #view-tirage #dtStatus { min-height: 40px; }
+  /* tableau des gains par rang : lecture haut en bas, responsive, interlignes aérés */
+  #dtRangs td { padding: 8px 10px; border-bottom: 1px solid #f2f2f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #dtRangs tbody tr:last-child td { border-bottom: none; }
+  body.dark #dtRangs td { border-bottom-color: #2a3550; }
+  /* ===== 🎯 RANG 1 GAGNANT : ligne mise en avant (halo doré + badge animé « Jackpot gagné ! ») ===== */
+  #dtRangs tr.rang1-won td { background: rgba(255,212,0,.14); }
+  body.dark #dtRangs tr.rang1-won td { background: rgba(255,212,0,.10); }
+  /* ===== FENÊTRES PEU HAUTES (≤820px) : « Générateur » et « Dernier tirage » compactés pour tenir SANS scroll ===== */
+  @media (max-height: 820px) {
+    .content { padding: 10px 16px; }   /* marges haut/bas réduites */
+    .card { padding: 14px 16px; margin-bottom: 12px; }   /* carte compacte : gagne ~20px de hauteur */
+    .card .sub { margin: 0 0 10px; }
+    #view-gen .create-wrap, #view-tirage .create-wrap { margin-top: 8px !important; }
+    #view-gen .create-panel, #view-gen .create-wrap > .create-panel { min-height: min(460px, calc(100vh - 210px)); }   /* GÉNÉRATEUR : hauteur FIXE sur écran moyen/petit — les grilles générées (boules) tiennent dedans SANS décalage des boutons ni du panneau validées */
+    #view-tirage .create-panel,
+    #view-tirage .create-wrap > .create-panel { min-height: 0; }   /* Dernier tirage : suit son contenu, jamais de scroll */
+    #dtRangs { font-size: 12px; }
+    #dtRangs th, #dtRangs td { padding: 4px 8px; }   /* 9 rangs sans scroll même sur fenêtre basse */
+    #view-tirage #dtStatus { min-height: 24px; }   /* zone compte à rebours compacte */
+    #view-tirage .balls-row { min-height: 40px; }
+  }
+  .badge-jackpot {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: linear-gradient(145deg,#ffe14d,#f5a800); color: #3d2c00;
+    font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+    margin-left: 28px; white-space: nowrap; vertical-align: middle;   /* ~20px de plus qu'avant : le badge « 🎉 Jackpot gagné ! » se détache nettement du libellé « Rang 1 » */
+    animation: jackpotPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes jackpotPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,212,0,.55); } 50% { box-shadow: 0 0 0 7px rgba(255,212,0,0); } }
+  body.dark .badge-jackpot { color: #101722; }   /* badge doré lisible sur fond bleu nuit */
+  /* ===== 🖨️ EXPORT PDF / IMPRESSION : ticket FDJ des grilles validées ===== */
+  #btnPrint { margin-top: 8px; align-self: center; width: 300px; }
+  /* bouton PDF « Faites vos jeux » : même alignement centré que le Générateur */
+  #btnCreatePdf { margin-top: 8px; align-self: center; width: 300px; }
+  #printZone { display: none; }   /* invisible à l'écran : uniquement pour l'impression */
+  #printZone .ticket { border: 2px dashed #333; padding: 18px 22px; font-family: "Courier New", monospace; color: #111; max-width: 520px; margin: 0 auto; }
+  #printZone .t-head { text-align: center; font-weight: 700; letter-spacing: 1px; }
+  #printZone .t-date { text-align: center; margin: 4px 0 12px; }
+  #printZone .t-grid { margin: 8px 0; white-space: nowrap; }
+  #printZone .t-label { font-weight: 700; }
+  #printZone .t-nums { font-size: 16px; font-weight: 700; letter-spacing: 2px; }
+  #printZone .t-chance { color: #c42b1c; font-weight: 700; }
+  #printZone .t-total { border-top: 1px dashed #333; margin-top: 12px; padding-top: 8px; font-weight: 700; }
+  #printZone .t-foot { text-align: center; margin-top: 10px; font-size: 11px; color: #444; }
+  #printZone .t-foot + .t-foot { margin-top: 2px; }
+  @media print {
+    body.printing > *:not(#printZone) { display: none !important; }   /* seule la zone ticket est imprimée */
+    body.printing #printZone { display: block !important; }
+    body { background: #fff !important; }
+  }
+  /* ===== PASTILLES NOMBRE DE GRILLES ===== */
+  .pill-group { display: flex; gap: 8px; margin-bottom: 18px; align-items: center; flex-wrap: wrap; }
+  .pill-group .pill-label { font-size: 13px; font-weight: 600; color: #1a1a1a; margin-right: 6px; }
+  .pill {
+    width: 34px; height: 34px; border-radius: 50%; border: 1px solid #d0d0d0;
+    background: #fff; color: #1a1a1a; font-family: inherit; font-size: 14px; font-weight: 600;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+  }
+  .pill:hover { border-color: #0067c0; }
+  .pill.active {
+    background: #0067c0; border-color: #0067c0; color: #fff;
+    box-shadow: 0 2px 6px rgba(0,103,192,.35);
+  }
+  /* ===== THÈME SOMBRE ===== */
+  body.dark { background: #101722; color: #e8ecf3; }
+  body.dark .content { background: linear-gradient(180deg,#151d2b,#101722); }
+  body.dark .card { background: rgba(28,38,56,.88); border-color: rgba(255,255,255,.08); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  body.dark .card h2, body.dark h3 { color: #f0f4fa; }
+  body.dark .tabs { background: rgba(20,28,42,.95); border-bottom-color: rgba(255,255,255,.06); }
+  body.dark .tab { color: #c7d3e4; }
+  body.dark .tab.active { background: rgba(255,255,255,.14); box-shadow: none; }
+  body.dark .btn.secondary { background: #2a3550; color: #e8ecf3; border-color: #3a4a66; }
+  body.dark input, body.dark select { background: #1a2436; color: #e8ecf3; border-color: #3a4a66; border-bottom-color: #5a7aa8; }
+  body.dark .pill { background: #1a2436; color: #e8ecf3; border-color: #3a4a66; }
+  body.dark .pill:hover { border-color: #48b0f8; }
+  body.dark .pill.active {   /* la pastille sélectionnée reste bleue en mode sombre */
+    background: #0067c0; border-color: #0067c0; color: #fff;
+    box-shadow: 0 2px 6px rgba(72,176,248,.45);
+  }
+  body.dark .pill-label { color: #e8ecf3; }   /* libellé « Nombre de grilles » lisible en sombre */
+  body.dark [style*="color:#1a1a1a"] { color: #e8ecf3 !important; }   /* au cas où d'autres textes noirs en dur */
+  body.dark .freq-bar { background: #2a3450; }
+  body.dark th { color: #9fb0c8; }
+  body.dark .bets-body td { border-bottom-color: #2a3550; }
+  body.dark .bets-head th { border-bottom-color: #3a4a66; }
+  body.dark .statusbar { background: rgba(20,28,42,.95); border-top-color: rgba(255,255,255,.06); color: rgba(232,236,243,.55); }
+  body.dark .card .sub, body.dark .kpi .label, body.dark #genInfo { color: #9fb0c8 !important; }
+  body.dark .grid-label { color: #9fb0c8 !important; }
+  /* phrase « Prochain tirage » : noire en clair, blanche en sombre, jamais en gras */
+  .nextDraw { color: #1a1a1a; font-weight: normal; }
+  body.dark .nextDraw, body.dark #genJackpot { color: #fff !important; }
+  /* textes gris en style inline */
+  body.dark [style*="color:#5c5c5c"] { color: #9fb0c8 !important; }
+  body.dark [style*="color:#8a8a8a"] { color: #7a8aa5 !important; }
+  /* ===== CURSEUR THÈME CLAIR / SOMBRE (barre de titre) ===== */
+  #themeToggle {
+    margin-left: auto; -webkit-app-region: no-drag; flex: none;
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    padding: 0 6px; line-height: 1; user-select: none;
+  }
+  #themeToggle .theme-label {
+    font-size: 12px; font-weight: 600; color: #dfe7f2; opacity: .85;
+    white-space: nowrap; letter-spacing: .2px;
+  }
+  #themeToggle .theme-switch {
+    width: 34px; height: 18px; border-radius: 9px; background: #4a5f82;
+    position: relative; flex: none; transition: background .2s;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.25);
+  }
+  #themeToggle .theme-switch::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%; background: #fff;
+    transition: left .2s; box-shadow: 0 1px 2px rgba(0,0,0,.35);
+  }
+  #themeToggle.on .theme-switch { background: #48b0f8; }
+  #themeToggle.on .theme-switch::after { left: 18px; }
+  #themeToggle input { display: none; }   /* la case est pilotée par le label */
+</style>
+</head>
+<body>
+<div class="window">
+    <div class="titlebar"><span class="app-icon">8</span><span style="margin-left:10px">Loto Studio — Générateur &amp; Suivi</span><label id="themeToggle"><span class="theme-label" id="themeLabel">Mode clair</span><span class="theme-switch"></span><input type="checkbox" id="themeCheck"></label></div>
+  <div class="tabs">
+    <button class="tab active" data-view="gen">🎲 Générateur de grilles</button>
+    <button class="tab" data-view="creation">✍🏻 Faites vos jeux</button>
+    <button class="tab" data-view="tirage">🎯 Dernier tirage</button>
+    <button class="tab" data-view="stats">📊 Statistiques</button>
+    <button class="tab" data-view="historique">🕘 Historique</button>
+    <button class="tab" data-view="mises">💶 Mises &amp; Gains</button>
+    <button class="tab" data-view="analyse">📈 Analyse</button>
+  </div>
+  <div class="content">
+
+    <!-- GÉNÉRATEUR -->
+    <section id="view-gen">
+      <div class="card">
+        <h2>🎲 Générateur de grilles</h2>
+        <p class="sub">| Génère une grille aléatoirement, en favorisant les numéros les plus sortis sur les 12 derniers mois | 🍀 <a class="lien-fdj-inline" href="https://www.fdj.fr/" target="_blank" rel="noopener">Remplir vos grilles sur fdj.fr</a> |</p>
+        <div class="create-wrap">
+          <div class="create-panel gen-grid-zone">
+            <div class="panel-head"><span>🎲 Grilles à générer</span><span class="head-info" id="kpiGenEtat">Aucune grille</span></div>
+            <p style="font-size:12px; color:#5c5c5c; margin:0 0 10px; height:18px; line-height:18px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis" id="genInfo">Rappel : le LOTO® reste un jeu de hasard, ces statistiques n'augmentent pas vos chances.</p>
+            <div class="create-topline">
+              <div class="pill-group" style="margin-bottom:0">
+                <span class="pill-label" style="font-size:12.5px">Nombre de grilles :</span>
+                <button type="button" class="pill" data-nb="1">1</button>
+                <button type="button" class="pill" data-nb="2">2</button>
+                <button type="button" class="pill" data-nb="3">3</button>
+                <button type="button" class="pill" data-nb="4">4</button>
+                <button type="button" class="pill" data-nb="5">5</button>
+              </div>
+              <button class="btn secondary" id="btnGenRefresh" style="height:34px; padding:6px 12px; font-size:12.5px; flex:none">🔄 Rafraîchir</button>
+            </div>
+            <div class="radios" style="margin:8px 0 0">
+              <label><input type="radio" name="mode" value="poids" checked> Aléatoire pondéré (recommandé)</label>
+              <label><input type="radio" name="mode" value="hot"> Strict : 5 numéros + N° Chance tirés au sort parmi les plus sortis</label>
+              <label><input type="radio" name="mode" value="plein"> Aléatoire uniforme 1 – 49</label>
+            </div>
+            <div id="genOut"><span>Choisissez le nombre de grilles puis cliquez sur « Générer »…</span></div>
+            <div style="display:flex; gap:10px; margin-top:auto; padding-top:14px; justify-content:center; flex-wrap:wrap">
+              <button class="btn" id="btnGen" disabled>🎲 Générer</button>
+              <button class="btn secondary" id="btnClear" disabled>🧹 Effacer les grilles non validées</button>
+            </div>
+          </div>
+          <div class="create-panel create-side">
+            <div class="panel-head"><span>📋 Grilles validées</span><span class="head-info" id="kpiGenValidees">0 sur 0 validée - 0,00 €</span></div>
+            <p style="font-size:12.5px; margin:12px 0 10px; min-height:18px; line-height:18px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" id="genJackpot"></p>
+            <div id="genRecap"><p>Aucune grille validée pour le moment</p></div>
+            <button class="btn" id="btnSave" disabled>💾 Enregistrer la mise (2,20 €)</button>
+            <button class="btn secondary" id="btnPrint" disabled>🖨️ Votre ticket en PDF</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CRÉATION DE GRILLE -->
+    <section id="view-creation" class="hidden">
+      <div class="card">
+        <h2>✍🏻 Faites vos jeux</h2>
+        <p class="sub">| Cochez vos numéros favoris | Retrouvez vos grilles enregistrées sur l'onglet 💶 <em><b><span class="lien-onglet" onclick="gotoTab('mises')">Mises & Gains</span></b></em> | 🍀 <a class="lien-fdj-inline" href="https://www.fdj.fr/" target="_blank" rel="noopener">Remplir vos grilles sur fdj.fr</a> |</p>
+        <div style="height:10px"></div>
+        <div class="create-wrap">
+          <div class="create-panel create-grid-zone">
+            <div class="panel-head"><span>✍🏻 Grilles à remplir</span><span class="head-info" id="kpiGrilleEnCours">Grille 1 · 0/5</span></div>
+            <div class="create-topline">
+              <div class="pill-group" style="margin-bottom:0">
+              <span class="pill-label" style="font-size:12.5px">Nombre de grilles :</span>
+              <button type="button" class="pill create-nb" data-nb="1" >1</button>
+              <button type="button" class="pill create-nb" data-nb="2" >2</button>
+              <button type="button" class="pill create-nb" data-nb="3" >3</button>
+              <button type="button" class="pill create-nb" data-nb="4" >4</button>
+              <button type="button" class="pill create-nb" data-nb="5" >5</button>
+              </div>
+              <button class="btn secondary" id="btnCreateClear" disabled>🧹 Effacer cette grille</button>
+            </div>
+            <div class="create-board" id="createBoard">
+              <div class="create-tabs" id="createTabs"></div>   <!-- pastilles « Grille 1 · 1/5 » : colonne à GAUCHE du bloc boules (plus de décalage vers le bas) -->
+              <div>
+                <div class="create-grid" id="createNums"></div>
+                <div style="text-align:center; font-size:12px; color:#5c5c5c; margin-top:10px" id="chanceLabel">N° Chance</div>
+                <div class="create-chance" id="createChance"></div>
+                <div class="chf-legend" id="chfLegend" style="display:none"><span>🔥 Lueur orange : parmi les 5 numéros les plus sortis (12 derniers mois)</span><span>❄️ Lueur bleue : parmi les 5 les plus en retard</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="create-panel create-side">
+            <div class="panel-head"><span>📋 Récapitulatif</span><span class="head-info" id="kpiGrillesCompletes">0 sur 1 complète</span></div>
+            <p id="createNextDraw"></p>
+            <div class="create-recap" id="createRecap"></div>
+            <p style="font-size:12px; color:#5c5c5c; margin:12px 0 4px; height:18px; line-height:18px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis" id="createInfo"></p>
+            <p style="font-size:12px; color:#8a8a8a; margin:0 0 12px; height:18px; line-height:18px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis" id="createSaveDate"></p>   <!-- même taille que la phrase du dessus -->
+            <button class="btn" id="btnCreateSave" disabled>💾 Enregistrer la mise (2,20 €)</button>
+            <button class="btn secondary" id="btnCreatePdf" disabled>🖨️ Votre ticket en PDF</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DERNIER TIRAGE -->
+    <section id="view-tirage" class="hidden">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap">
+          <div>
+            <h2 id="dtTitle"></h2>
+            <p class="sub" style="margin-bottom:0">Résultat officiel LOTO® (source FDJ)</p>
+          </div>
+          <div style="display:flex; gap:8px; flex:none">
+            <button class="btn" id="btnRefresh" style="padding:8px 14px; font-size:12.5px; flex:none"><span id="icoRefresh">🔄</span> Actualiser</button>
+            <button class="btn secondary" id="btnCheck" style="padding:8px 14px; font-size:12.5px; flex:none">✅ Vérifier mes grilles</button>
+          </div>
+        </div>
+        <div class="create-wrap" style="margin-top:14px">
+          <div class="create-panel" id="dtLeft">
+            <div class="panel-head"><span>🎯 Résultat du tirage</span><span class="head-info">Boules + N° Chance</span></div>
+            <div class="balls-row" id="dtBalls" style="margin-top:14px; min-height:50px"></div>
+            <div style="flex:1; display:flex; flex-direction:column; justify-content:center; margin:14px 0 0">
+              <div style="font-size:13.5px; line-height:2" id="dtInfo"></div>
+              <div style="min-height:40px; line-height:1.5; margin-top:12px; padding-top:10px; font-size:13px; font-weight:600; border-top:1px dashed rgba(0,0,0,.12)" id="dtStatus"></div>
+            </div>
+          </div>
+          <div class="create-panel" id="dtRight">
+            <div class="panel-head"><span>💶 Gains par rang</span><span class="head-info">10 rangs FDJ</span></div>
+            <table id="dtRangs" style="width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed">
+              <thead><tr>
+                <th style="text-align:left; padding:8px 10px; border-bottom:1px solid #eee; color:#5c5c5c; font-weight:500; width:46%">Rang</th>
+                <th style="text-align:right; padding:8px 10px; border-bottom:1px solid #eee; color:#5c5c5c; font-weight:500">Grilles gagnantes</th>
+                <th style="text-align:right; padding:8px 10px; border-bottom:1px solid #eee; color:#5c5c5c; font-weight:500">Gain par grille</th>
+              </tr></thead>
+              <tbody><tr><td colspan="3" style="color:#8a8a8a; padding:8px 10px">Actualisez les résultats (bouton 🔄) pour afficher les grilles gagnantes et les gains de chaque rang.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- STATISTIQUES -->
+    <section id="view-stats" class="hidden">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap">
+          <div>
+            <h2>📊 Statistiques des 12 derniers mois</h2>
+            <p class="sub" style="margin-bottom:0" id="statsSub">Nombre de sorties par numéro sur l'année glissante (mise à jour : 10/10/2026) · cliquez sur une boule pour ses dates de sortie</p>
+          </div>
+          <button class="btn" id="btnStatsRefresh" style="padding:8px 14px; font-size:12.5px; flex:none"><span id="icoStats">🔄</span> Actualiser</button>
+        </div>
+        <div style="margin-top:14px; display:flex; gap:8px; align-items:center; font-size:12.5px; flex-wrap:wrap">
+          <span style="color:#5c5c5c">Trier les numéros :</span>
+          <button class="tri-btn active" data-tri="desc">Sorties ↓</button>
+          <button class="tri-btn" data-tri="asc">Sorties ↑</button>
+          <button class="tri-btn" data-tri="num">N° 1 → 49</button>
+        </div>
+        <div style="margin-top:10px" class="grid50" id="statsNums"></div>
+        <h3 style="margin:12px 0 6px; font-size:14px" id="statsRestTitle">Les autres numéros</h3>
+        <div style="display:flex; gap:10px 7px; flex-wrap:wrap; align-items:flex-start" id="statsRest"></div>
+        <h3 style="margin:12px 0 8px; font-size:15px">Numéros Chance</h3>
+        <div style="display:flex; gap:10px; flex-wrap:wrap" id="statsChance"></div>
+        <h3 style="margin:12px 0 8px; font-size:15px">Numéros en retard (les plus absents)</h3>
+        <div style="display:flex; gap:10px; flex-wrap:wrap" id="statsRetard"></div>
+      </div>
+    </section>
+
+    <!-- HISTORIQUE -->
+    <section id="view-historique" class="hidden">
+      <div class="card">
+        <h2>🕘 Les 30 derniers tirages</h2>
+        <p class="sub">| Extrait des archives officielles FDJ | Mis à jour avec le bouton Actualiser de l'onglet 📊 <em><b><span class="lien-onglet" onclick="gotoTab('stats')">Statistiques</span></b></em> |</p>
+        <div id="histList" style="columns: 310px 3; column-gap: 24px"></div>
+      </div>
+    </section>
+
+    <!-- MISES & GAINS -->
+    <section id="view-mises" class="hidden">
+      <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap">
+          <div>
+            <h2>💶 Mises &amp; Gains</h2>
+            <p class="sub" style="margin-bottom:0">Suivi de vos mises, gains et rangs gagnants</p>
+          </div>
+          <div style="display:flex; gap:8px; flex:none">
+            <button class="btn secondary" id="btnExport" style="padding:8px 14px; font-size:12.5px; flex:none" data-tip="Sauvegarde de toutes vos mises dans un fichier JSON">💾 Sauvegarder mes mises</button>
+            <button class="btn secondary" id="btnRestore" style="padding:8px 14px; font-size:12.5px; flex:none" data-tip="Restaurer des mises depuis un fichier de sauvegarde JSON">📂 Restaurer</button>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px 24px; margin-top:14px; padding-top:14px; border-top:1px solid rgba(0,0,0,.08)">
+          <div style="border:1px solid #3a4a66; border-radius:4px; padding:10px 14px; text-align:center"><div class="label" style="font-size:12px; color:#5c5c5c">Total misé</div><div class="value" style="font-size:24px; font-weight:700" id="kMise"></div></div>
+          <div style="border:1px solid #3a4a66; border-radius:4px; padding:10px 14px; text-align:center"><div class="label" style="font-size:12px; color:#5c5c5c">Total gagné</div><div class="value green" style="font-size:24px; font-weight:700" id="kGain"></div></div>
+          <div style="border:1px solid #3a4a66; border-radius:4px; padding:10px 14px; text-align:center"><div class="label" style="font-size:12px; color:#5c5c5c">Bilan net</div><div class="value" style="font-size:24px; font-weight:700" id="kSolde"></div></div>
+          <div style="border:1px solid #3a4a66; border-radius:4px; padding:10px 14px; text-align:center"><div class="label" style="font-size:12px; color:#5c5c5c">Grilles jouées</div><div class="value" style="font-size:24px; font-weight:700" id="kCount"></div></div>
+        </div>
+      </div>
+      <div class="card" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end">
+        <div style="flex:1; min-width:280px"><h2 style="margin:0 0 4px; font-size:20px; font-weight:600">🚀 Mise express</h2>
+          <p class="sub" style="margin:0 0 6px">Jouez vos 5 numéros + N° Chance favoris - 🍀 <a class="lien-fdj-inline" href="https://www.fdj.fr/" target="_blank" rel="noopener">Remplir vos grilles sur fdj.fr</a></p>
+          <p style="font-size:13px; margin:0 0 6px" id="misesNextDraw"></p>
+          <div style="display:flex; gap:10px 14px; flex-wrap:wrap; align-items:flex-end; margin-top:10px">
+            <div><div style="font-size:12px; margin-bottom:4px">Date du tirage</div><input type="date" id="fDate"></div>
+            <div><div style="font-size:12px; margin-bottom:4px">Numéros (5) + N° Chance</div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                <input class="ball-input" id="fN1" maxlength="2" inputmode="numeric" placeholder="✓">
+                <input class="ball-input" id="fN2" maxlength="2" inputmode="numeric" placeholder="✓">
+                <input class="ball-input" id="fN3" maxlength="2" inputmode="numeric" placeholder="✓">
+                <input class="ball-input" id="fN4" maxlength="2" inputmode="numeric" placeholder="✓">
+                <input class="ball-input" id="fN5" maxlength="2" inputmode="numeric" placeholder="✓">
+                <span style="font-size:15px; color:#e03424; font-weight:700; margin:0 2px">+</span>
+                <input class="ball-input chance-input" id="fChance" maxlength="2" inputmode="numeric" placeholder="★" data-tip="N° Chance">
+              </div></div>
+          </div></div>
+        <button class="btn" id="btnAddBet" disabled>🎲 Ajouter la mise</button>
+        <button class="btn secondary" id="btnClearBet" disabled>🧹 Effacer</button>
+        <button class="btn secondary" id="btnBetPdf" disabled>🖨️ Ticket</button>
+      </div>
+        <div class="card" style="padding:8px">
+        <table class="bets-head">
+          <colgroup>
+            <col style="width:95px"><col><col style="width:70px">
+            <col><col style="width:80px"><col style="width:40px">
+          </colgroup>
+          <thead><tr><th id="thDate" style="cursor:pointer; user-select:none">Date</th><th>Grille</th><th id="thMise" style="cursor:pointer; user-select:none">Mise</th><th>Rang</th><th id="thGain" style="cursor:pointer; user-select:none">Gain (€)</th><th></th></tr></thead>
+        </table>
+        <div class="bets-body-wrap">
+          <table class="bets-body">
+            <colgroup>
+              <col style="width:95px"><col><col style="width:70px">
+              <col><col style="width:80px"><col style="width:40px">
+            </colgroup>
+            <tbody id="betRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <!-- ANALYSE -->
+    <section id="view-analyse" class="hidden">
+      <div class="card" id="analyseCard">
+        <h2>📈 Analyse des gains</h2>
+        <p class="sub">Pourcentages et répartition calculés sur vos mises enregistrées</p>
+        <div style="display:flex; gap:28px; flex-wrap:wrap; align-items:center">
+          <div style="position:relative; width:150px; height:150px; flex:none" id="anDonut"></div>
+          <div style="flex:1; min-width:240px" id="anKpis"></div>
+        </div>
+        <div style="margin-top:14px" id="anBars"></div>
+        <div style="margin-top:14px; max-width:100%; overflow-x:hidden" id="anCurve"></div>
+      </div>
+    </section>
+
+  </div>
+  <div class="statusbar">
+    <span>LOTO® - Jeu réservé aux majeurs · Jouer comporte des risques</span>
+    <span class="copyright">© <span id="year"></span> Tous droits réservés | Reproduction interdite | Développeur et propriétaire : Thierry BARTHOUX | <span id="appVersion">Version </span></span>
+  </div>
+</div>
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3 id="modalTitle">Gain</h3>
+    <p id="modalMsg"></p>
+    <input type="text" id="modalInput" inputmode="decimal" placeholder="0">
+    <div class="modal-actions">
+      <button class="btn secondary" id="modalCancel">Annuler</button>
+      <button class="btn" id="modalOk">Valider</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="confirmOverlay">
+  <div class="modal">
+    <h3 id="confirmTitle">Supprimer la mise</h3>
+    <p id="confirmMsg">Êtes-vous certain de vouloir supprimer cette mise ?</p>
+    <div class="modal-actions">
+      <button class="btn secondary" id="confirmCancel">Annuler</button>
+      <button class="btn" id="confirmOk">Confirmer</button>
+    </div>
+  </div>
+</div>
+<!-- modale RÉCAP « Vérifier mes grilles » : comparaison du dernier tirage avec les grilles enregistrées -->
+<div class="modal-overlay" id="recapOverlay">
+  <div class="modal" style="width:430px; max-height:82vh; overflow:auto">
+    <h3 id="recapTitle">✅ Vérification des grilles</h3>
+    <div id="recapBody" style="margin:0 0 16px"></div>
+    <div class="modal-actions"><button class="btn" id="recapOk">Fermer</button></div>
+  </div>
+</div>
+<div id="numDetail">
+  <div class="modal">
+    <h3 id="ndTitle"></h3>
+    <p id="ndInfo" style="margin-bottom:0"></p>
+    <div class="dates" id="ndDates"></div>
+    <div id="ndBets" style="margin-top:10px"></div>
+    <div class="modal-actions"><button class="btn" onclick="document.getElementById('numDetail').classList.remove('open')">Fermer</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"><span class="icon">✓</span><span id="toastMsg">Mise enregistrée</span><span class="progress"></span></div>
+<div class="toast" id="updateToast" style="top:96px"><span class="icon" style="background:#0a7a0a">🆕</span><span id="updateMsg">Mise à jour</span><span class="progress"></span></div>   <!-- toast DÉDIÉ à la mise à jour : le toast principal est unique et tous les messages s'y écrasent mutuellement ; celui-ci ne peut donc JAMAIS être masqué -->
+
+<script>
+/* ================= DONNÉES ================= */
+const DERNIER_TIRAGE = {
+  date: "Samedi 10 octobre 2026",
+  numeros: [4, 17, 22, 46, 49],
+  chance: 4,
+  jackpot: "7 000 000 €",
+  prochain: { date: "Lundi 12 octobre 2026", jackpot: "8 000 000 €" }
+};
+let FREQ_NUMS = [
+  { n: 3, s: 25 }, { n: 41, s: 22 }, { n: 7, s: 21 }, { n: 34, s: 21 },
+  { n: 36, s: 17 }, { n: 32, s: 17 }, { n: 5, s: 16 }, { n: 18, s: 16 },
+  { n: 25, s: 16 }, { n: 30, s: 16 }, { n: 31, s: 16 }, { n: 19, s: 16 },
+  { n: 22, s: 14 }, { n: 28, s: 13 }, { n: 15, s: 13 }, { n: 48, s: 13 },
+  { n: 11, s: 13 }, { n: 12, s: 12 }, { n: 44, s: 12 }, { n: 27, s: 11 }
+];
+let FREQ_CHANCE = [
+  { n: 8, s: 15 }, { n: 4, s: 14 }, { n: 6, s: 13 }, { n: 1, s: 13 },
+  { n: 9, s: 12 }, { n: 5, s: 12 }, { n: 10, s: 11 }, { n: 7, s: 11 },
+  { n: 3, s: 10 }, { n: 2, s: 9 }
+];
+const PRIX_GRILLE = 2.2;
+const RANGS = {
+  1: "5 numéros + N° Chance", 2: "5 numéros",
+  3: "4 numéros + N° Chance", 4: "4 numéros",
+  5: "3 numéros + N° Chance", 6: "3 numéros",
+  7: "2 numéros + N° Chance", 8: "2 numéros",
+  9: "1 numéro + N° Chance", 10: "0 numéro + N° Chance"
+};
+
+/* ================= PERSISTANCE ================= */
+let bets = [];
+let uid = 0;
+const isElectron = !!(window.betsAPI);
+
+/* Version dynamique lue depuis package.json via main.js */
+/* ===== DIAGNOSTIC PDF : expliquer POURQUOI le pont pdfAPI est absent =====
+   - ponts FDJ présents mais pas pdfAPI  -> preload.js ancien (mauvais fichier/dossier)
+   - aucun pont                          -> preload.js pas chargé du tout (mauvais dossier, ou exe packagé avec app.asar) */
+window.addEventListener("load", () => setTimeout(() => {
+  if (window.pdfAPI && window.pdfAPI.export) return;
+  const ponts = ["betsAPI", "lotoAPI", "drawAPI", "appAPI", "statsAPI"].filter((k) => window[k]);
+  if (!ponts.length) showToast("⚠ Diagnostic : preload.js NON chargé du tout (mauvais dossier ou exe packagé - voir la discussion)");
+  else showToast("⚠ Diagnostic : preload.js ANCIEN chargé (ponts : " + ponts.join(", ") + " mais pas pdfAPI)");
+}, 2500));
+
+if (isElectron && window.appAPI && window.appAPI.getVersion) {
+  window.appAPI.getVersion().then(v => {
+    const el = document.getElementById('appVersion');
+    if (el && v) el.textContent = 'version ' + v;
+  }).catch(() => {});
+}
+
+/* ===== 🔄 AUTO-MISE À JOUR : vérification GitHub au démarrage =====
+   Notification par toast DÉDIÉ (#updateToast, sous le toast principal) : le toast
+   normal est unique et chaque message (rangs recalculés, rappel…) écrase le précédent,
+   ce qui masquait l'annonce de mise à jour. Ici, plus de course possible. */
+let updateToastTimer = null;
+function showUpdateToast(msg) {
+  const t = document.getElementById("updateToast");
+  document.getElementById("updateMsg").textContent = msg;
+  t.classList.remove("show");
+  void t.offsetWidth; /* force le navigateur à réinitialiser l'animation */
+  t.classList.add("show");
+  clearTimeout(updateToastTimer);
+  updateToastTimer = setTimeout(() => t.classList.remove("show"), 15000);   /* visible plus longtemps : l'information est actionable (redémarrer) */
+}
+if (isElectron && window.updateAPI && window.updateAPI.check) {
+  window.updateAPI.check().then((r) => {
+    if (r && r.status === "update-ready") showUpdateToast("🆕 Nouvelle version téléchargée : fermez puis rouvrez Loto Studio pour l'appliquer ✓");
+  }).catch(() => {});
+}
+
+async function initBets() {
+  let migrated = false;
+  if (isElectron) {
+    bets = await window.betsAPI.load();
+    // Migration : si le fichier est vide mais que localStorage contient d'anciennes mises
+    if (!bets.length) {
+      try {
+        const old = JSON.parse(localStorage.getItem("lotoStudio.bets") || "[]");
+        if (old.length) { bets = old; migrated = true; save(); }
+      } catch (e) { /* rien */ }
+    }
+  }
+  else { try { bets = JSON.parse(localStorage.getItem("lotoStudio.bets") || "[]"); } catch (e) { bets = []; } }
+  /* ===== MIGRATION ANCIENNE NUMÉROTATION DES RANGS (9 rangs -> 10 rangs FDJ) =====
+     Ancienne : 3=4 num, 4=3 num+Chance, 5=3 num, 6=2 num+Chance, 7=2 num, 8=1 num+Chance, 9=0 num+Chance
+     Nouvelle :         3=4 num+Chance, 4=4 num, 5=3+Chance, 6=3, 7=2+Chance, 8=2, 9=1+Chance, 10=0+Chance */
+  let migre = 0;
+  const ANCIEN_RANGS = { 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: 10 };
+  for (const b of bets) {
+    if (b.rang !== null && ANCIEN_RANGS[b.rang] !== undefined) { b.rang = ANCIEN_RANGS[b.rang]; migre++; }
+  }
+  if (migre) { save(); showToast("Rangs recalés sur la grille officielle : " + migre + " mise" + (migre > 1 ? "s" : "") + " à jour ✓"); }
+  /* ===== DÉDOUBLONNAGE DES MISES =====
+     Une même grille (mêmes 5 numéros + même N° Chance) jouée à la même date = un doublon :
+     elle ne compte qu'une seule fois. On conserve la mise qui a un gain renseigné,
+     sinon la plus ancienne. Les mises ne diffèrent que par leur id. */
+  let doublons = 0;
+  const vus = new Set();
+  const uniques = [];
+  for (const b of bets) {
+    const cle = b.date + "|" + [...b.nums].sort((x, y) => x - y).join(",") + "|" + b.chance;
+    if (vus.has(cle)) {
+      doublons++;
+      const existante = uniques.find((u) => u.date + "|" + [...u.nums].sort((x, y) => x - y).join(",") + "|" + u.chance === cle);
+      if (existante && b.gain > 0 && existante.gain === 0) {
+        // le doublon porte le gain : on le garde à la place de l'ancienne ligne
+        Object.assign(existante, b, { id: existante.id });
+      }
+      continue;   // doublon : on ne le garde pas
+    }
+    vus.add(cle);
+    uniques.push(b);
+  }
+  if (doublons) { bets = uniques; save(); showToast("Dédoublonnage : " + doublons + " mise" + (doublons > 1 ? "s" : "") + " en double supprimée" + (doublons > 1 ? "s" : "") + " ✓"); }
+  uid = bets.reduce((m, b) => Math.max(m, b.id), 0);
+  renderBets();
+  if (migrated) showToast("Historique récupéré : " + bets.length + " mise" + (bets.length > 1 ? "s" : "") + " transférée" + (bets.length > 1 ? "s" : "") + " ✓");
+  setTimeout(rappelGains, 1200);   // (5) rappel des gains à saisir une fois l'app prête
+}
+const save = () => {
+  if (isElectron) {
+    window.betsAPI.save(bets);
+    // Sauvegarde rotative : une copie de sécurité journalière, transparente pour l'utilisateur.
+    // L'export manuel (« 💾 Sauvegarder mes mises ») reste inchangé et recommandé.
+    try { localStorage.setItem("lotoStudio.betsBackup", JSON.stringify(bets)); } catch (e) { /* quota localStorage dépassé : tant pis */ }
+  }
+  else localStorage.setItem("lotoStudio.bets", JSON.stringify(bets));
+};
+initBets();
+
+/* ================= UTILS ================= */
+const $ = (s) => document.querySelector(s);
+const fmt = (x) => x.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function weightedPick(items, k) {
+  const pool = items.map((x) => ({ n: x.n, w: Math.pow(x.s, 2.5) }));
+  const out = [];
+  while (out.length < k) {
+    const total = pool.reduce((a, b) => a + b.w, 0);
+    let r = Math.random() * total, idx = 0;
+    for (let i = 0; i < pool.length; i++) { r -= pool[i].w; if (r <= 0) { idx = i; break; } }
+    out.push(pool[idx].n);
+    pool.splice(idx, 1);
+  }
+  return out.sort((a, b) => a - b);
+}
+function ballHTML(n, cls) { return `<span class="ball ${cls}">${n}</span>`; }
+
+/* ===== TOAST ===== */
+let toastTimer = null;
+const TOAST_MS = 8000;   /* durée d'affichage du toast : sert AUSSI au halo du bouton Ticket (effet et toast disparaissent ensemble) */
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  document.getElementById("toastMsg").textContent = msg;
+  t.classList.remove("show");
+  void t.offsetWidth; /* force le navigateur à réinitialiser l'animation */
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), TOAST_MS);
+}
+
+/* ===== THÈME CLAIR / SOMBRE ===== */
+function applyTheme(dark) {
+  document.body.classList.toggle("dark", dark);
+  $("#themeToggle").classList.toggle("on", dark);
+  $("#themeLabel").textContent = dark ? "Mode sombre" : "Mode clair";
+  $("#themeCheck").checked = dark;
+}
+$("#themeCheck").addEventListener("change", () => {
+  const dark = $("#themeCheck").checked;
+  localStorage.setItem("lotoStudio.theme", dark ? "dark" : "light");
+  applyTheme(dark);
+});
+applyTheme(localStorage.getItem("lotoStudio.theme") === "dark");
+
+/* ================= NAVIGATION ================= */
+function gotoTab(view) {   // même effet qu'un clic sur l'onglet (bascule + recalages)
+  const t = document.querySelector('.tab[data-view="' + view + '"]');
+  if (t) t.click();
+}
+window.gotoTab = gotoTab;
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+  t.classList.add("active");
+  ["gen", "creation", "tirage", "stats", "historique", "analyse", "mises"].forEach((v) =>
+    $("#view-" + v).classList.toggle("hidden", v !== t.dataset.view));
+  if (t.dataset.view === "mises") {   // recalibre avec de vraies mesures, depuis le haut de l'onglet
+    document.querySelector(".window > .content").scrollTop = 0;
+    renderBets();
+  }
+  if (t.dataset.view === "analyse") renderAnalyse();
+}));
+
+/* 🎫 Rappel « édition de ticket » : singulier ou pluriel selon le nombre de mises.
+   btnId : bouton 🎫 Ticket concerné — halo pulsé EXACTEMENT le temps du toast (TOAST_MS) */
+let ticketGlowTimer = null;
+function toastTicket(n, btnId) {
+  showToast("🎫 Éditez un ticket avant d'enregistrer " + (n > 1 ? "vos mises" : "votre mise") + " (non obligatoire)");
+  if (ticketGlowTimer) { clearTimeout(ticketGlowTimer); ticketGlowTimer = null; }
+  document.querySelectorAll(".ticket-glow").forEach((b) => b.classList.remove("ticket-glow"));
+  const b = btnId ? document.getElementById(btnId) : null;
+  if (b) {
+    b.classList.add("ticket-glow");   /* le restart est géré par l'animation elle-même (infinite) */
+    ticketGlowTimer = setTimeout(() => { b.classList.remove("ticket-glow"); ticketGlowTimer = null; }, TOAST_MS);
+  }
+}
+
+/* ================= GÉNÉRATEUR (2 panneaux : générer à gauche, valider à droite) ================= */
+let currentGrilles = [];    // tableau des grilles générées (1 à 5)
+let validees = new Set();   // index des grilles validées (panneau de droite)
+function genKpis() {
+  const v = validees.size, n = currentGrilles.length;
+  $("#kpiGenEtat").textContent = n ? n + " grille" + (n > 1 ? "s générées" : " générée") : "Aucune grille";
+  $("#kpiGenValidees").textContent = v + " sur " + n + " validée" + (v > 1 ? "s" : "") + " - " + fmt(v * PRIX_GRILLE) + " €";   /* montant des mises, comme dans Faites vos jeux */
+  /* Enregistrer reste TOUJOURS visible (grisé) : c'est lui qui cale le bouton PDF en bas du panneau */
+  $("#btnSave").disabled = v === 0;
+  $("#btnSave").textContent = v > 1 ? `💾 Enregistrer les ${v} mises (${fmt(v * PRIX_GRILLE)} €)` : "💾 Enregistrer la mise (2,20 €)";
+  /* le bouton PDF reste TOUJOURS visible (grisé) : son apparition ne change plus la hauteur du panneau */
+  $("#btnPrint").disabled = v === 0;
+  /* EFFACER grisé s'il n'y a plus AUCUNE grille non validée (tout est validé) */
+  $("#btnClear").disabled = !n || v === n;
+}
+function renderGenOut(fresh) {   // fresh = index de départ : toutes les grilles >= fresh viennent d'être générées (pop)
+  const out = $("#genOut");
+  if (!currentGrilles.length) {
+    out.innerHTML = "<span>Choisissez le nombre de grilles puis cliquez sur « Générer »…</span>";
+    genKpis(); return;
+  }
+  out.innerHTML = currentGrilles.map((g, i) => {
+    const v = validees.has(i);
+    return `<div class="gen-line${v ? " valide" : ""}${fresh !== undefined && i >= fresh ? " fresh" : ""}"><span class="gen-label">Grille ${i + 1}</span><span class="rec-balls">` +
+      g.nums.map((x) => ballHTML(x, "ball")).join("") + `<span class="plus">+</span>` + ballHTML(g.chance, "chance ball") +
+      `</span><button type="button" class="btn secondary btn-valider" data-i="${i}">${v ? "✓ Validée" : "Valider la grille N°" + (i + 1)}</button></div>`;
+  }).join("");
+  genKpis();
+}
+function renderGenRecap(freshIdx) {
+  const rc = $("#genRecap");
+  const sel = [...validees].sort((a, b) => a - b);
+  if (!sel.length) { rc.innerHTML = "<p>Aucune grille validée pour le moment</p>"; genKpis(); return; }
+  rc.innerHTML = sel.map((i) => {
+    const g = currentGrilles[i];
+    return `<div class="rec-line${i === freshIdx ? " fresh" : ""}"><span class="rec-label">Grille ${i + 1} ✅</span><span class="rec-balls">` +
+      g.nums.map((x) => ballHTML(x, "ball")).join("") + `<span class="plus">+</span>` + ballHTML(g.chance, "chance ball") + `</span></div>`;
+  }).join("");
+  genKpis();
+}
+/* Valider / dévalider une grille (clic sur « Valider la grille N°X ») */
+$("#genOut").addEventListener("click", (e) => {
+  const b = e.target.closest(".btn-valider");
+  if (!b) return;
+  const i = +b.dataset.i;
+  if (validees.has(i)) { validees.delete(i); renderGenOut(); renderGenRecap(); }
+  else { validees.add(i); renderGenOut(); renderGenRecap(i); if (validees.size === currentGrilles.length) toastTicket(validees.size, "btnPrint"); }   // rappel ticket seulement quand TOUTES les grilles sont validées
+});
+function clearGrille() {
+  // EFFACER ne supprime que les grilles NON validées : les validées restent
+  // visibles dans les deux panneaux (ex. 5 générées -> 2 validées -> Effacer :
+  // il reste les 2 validées, on peut générer 3 autres grilles).
+  if (validees.size) {
+    currentGrilles = [...validees].sort((a, b) => a - b).map((i) => currentGrilles[i]);
+    validees = new Set(currentGrilles.map((_, i) => i));
+  } else {
+    currentGrilles = [];
+  }
+  renderGenOut(); renderGenRecap();
+  $("#btnClear").disabled = !currentGrilles.length;
+  // la demande initiale est CONSERVÉE : la pastille reste bleue (ex. « 5 ») et
+  // le bouton Générer reste actif -> un clic re-génère les grilles manquantes
+  // (5 demandées - 2 validées = 3 re-générées), sans toucher aux validées.
+}
+$("#btnClear").addEventListener("click", clearGrille);
+/* Rafraîchir : remise à zéro COMPLÈTE du générateur (boules gauche + droite, pastilles) */
+$("#btnGenRefresh").addEventListener("click", () => {
+  currentGrilles = [];
+  validees = new Set();
+  renderGenOut(); renderGenRecap();
+  $("#btnClear").disabled = true;
+  $("#btnGen").disabled = true;
+  nbGrilles = 0;
+  document.querySelectorAll("#view-gen .pill").forEach((x) => x.classList.remove("active"));
+});
+/* Pastilles 1-5 : sélection du nombre de grilles */
+let nbGrilles = 0;
+document.querySelectorAll("#view-gen .pill").forEach((p) => p.addEventListener("click", () => {
+  document.querySelectorAll("#view-gen .pill").forEach((x) => x.classList.remove("active"));
+  p.classList.add("active");
+  nbGrilles = +p.dataset.nb;
+  $("#btnGen").disabled = false;   // un nombre choisi : bouton Générer actif
+}));
+$("#btnGen").addEventListener("click", () => {
+  if (!nbGrilles) { showToast("⚠ Choisissez d'abord le nombre de grilles (1 à 5)"); return; }
+  const mode = document.querySelector("input[name=mode]:checked").value;
+  // (1) SEULES les grilles NON validées se floutent : les validées restent nettes
+  document.querySelectorAll("#genOut .gen-line:not(.valide)").forEach((l) => {
+    l.style.filter = "blur(3px)"; l.style.opacity = ".4";
+  });
+  setTimeout(() => {
+    // (2) Les grilles VALIDÉES sont conservées telles quelles ; les NON validées
+    // sont RE-GÉNÉRÉES à volonté (pastille 5 + 2 validées -> 3 nouvelles, indéfiniment,
+    // plus aucune alerte de plafond).
+    const garde = [...validees].sort((a, b) => a - b).map((i) => currentGrilles[i]);
+    const nb = Math.max(0, Math.min(5, nbGrilles) - garde.length);
+    if (nb === 0) {
+      currentGrilles = garde;
+      validees = new Set(currentGrilles.map((_, i) => i));
+      renderGenOut(); renderGenRecap();
+      showToast("⚠ La pastille choisie est déjà couverte par vos grilles validées");
+      return;
+    }
+    currentGrilles = garde;   // les validées en tête, les nouvelles s'ajoutent derrière
+    validees = new Set(currentGrilles.map((_, i) => i));
+    const premier = currentGrilles.length;
+    for (let i = 0; i < nb; i++) {
+      let nums, chance;
+      if (mode === "hot") {
+        // tirage aléatoire de 5 parmi les 20 numéros les plus sortis, chance parmi les 10
+        nums = FREQ_NUMS.slice(0, 20).map((x) => x.n).sort(() => Math.random() - .5).slice(0, 5).sort((a,b)=>a-b);
+        chance = FREQ_CHANCE.slice(0, 10).map((x) => x.n)[Math.floor(Math.random() * 10)];
+      }
+      else if (mode === "plein") {
+        nums = Array.from({ length: 49 }, (_, i) => i + 1).sort(() => Math.random() - .5).slice(0, 5).sort((a,b)=>a-b);
+        chance = 1 + Math.floor(Math.random() * 10);
+      } else { nums = weightedPick(FREQ_NUMS, 5); chance = weightedPick(FREQ_CHANCE, 1)[0]; }
+      currentGrilles.push({ nums, chance });
+    }
+    renderGenOut(premier); renderGenRecap();   // pop uniquement sur les grilles nouvellement générées
+    $("#btnClear").disabled = false;
+  }, 550);
+});
+const estDoublon = (date, nums, chance) =>
+  bets.some((b) => b.date === date && b.chance === chance &&
+    b.nums.length === nums.length && b.nums.every((n, i) => n === nums[i]));
+
+/* ================= ✍🏻 CRÉATION DE GRILLE (sélecteur à la FDJ) ================= */
+const CREATE = {
+  nb: 0,                                  // aucune grille sélectionnée à l'ouverture (comme le Générateur)
+  actif: 0,                               // grille en cours d'édition
+  nums: [[], [], [], [], []],             // numéros cochés par grille
+  chance: [null, null, null, null, null]  // N° Chance par grille
+};
+const grilleComplete = (i) => CREATE.nums[i].length === 5 && CREATE.chance[i] !== null;
+let COMPLETE_DEJA = new Set();   // grilles déjà complètes au rendu précédent (l'effet pop ne rejoue pas dessus)
+/* ===== (3) INFOBULLE DE SURVOL : dates de sortie du numéro, réutilisées des Statistiques =====
+   L'historique des stats s'arrête au tirage précédent : on y fusionne le DERNIER TIRAGE
+   connu (celui de ce soir par ex.) pour que « dernière sortie » soit toujours à jour. */
+function histAvecTirageRecent() {
+  let hist = [];
+  try {
+    hist = (STATS_DATA && Array.isArray(STATS_DATA.history)) ? STATS_DATA.history.slice() : [];   // try : STATS_DATA peut être en zone morte au 1er rendu
+  } catch (e) { hist = []; }
+  try {
+    const dk = dateKeyDe(DERNIER_TIRAGE.date);   // "Samedi 18 octobre 2026" -> "18/10/2026"
+    if (dk && Array.isArray(DERNIER_TIRAGE.numeros) && !hist.some((h) => h.date === dk)) {
+      hist.unshift({ date: dk, numeros: DERNIER_TIRAGE.numeros, chance: DERNIER_TIRAGE.chance });
+    }
+  } catch (e) { /* pas de dernier tirage exploitable */ }
+  return hist;
+}
+function infobulleNum(n, isChance) {
+  let hist = histAvecTirageRecent();
+  const label = isChance ? "N° Chance " + n : "Numéro " + n;
+  if (!hist.length) return null;   // pas encore de stats chargées : pas d'infobulle du tout
+  const nb = Math.min(hist.length, (STATS_DATA && +STATS_DATA.nbTirages) || hist.length);   // même base que les compteurs
+  hist = hist.slice(0, nb);
+  const sorties = hist.filter((h) => isChance ? h.chance === n : (h.numeros || h.nums).includes(n));
+  if (!sorties.length) return label + " — aucune sortie connue";
+  /* écart en JOURS CALENDAIRES (pas en heures écoulées) : un numéro sorti hier
+     affiche « il y a 1 j », même consulté le lendemain à 23 h. */
+  const pj = sorties[0].date.split("/").map(Number);
+  const today = new Date();
+  const jours = (pj.length === 3 && pj.every((x) => !isNaN(x)))
+    ? Math.max(0, Math.round((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+        - Date.UTC(pj[2], pj[1] - 1, pj[0])) / 86400000))
+    : 0;
+  return label + " - " + sorties.length + " sortie" + (sorties.length > 1 ? "s" : "") + " sur " + nb +
+    " tirages · dernière : " + sorties[0].date + (jours ? " (il y a " + jours + " j)" : "");
+}
+
+/* ===== 🔥/❄️ CHAUDS & FROIDS (onglet Faites vos jeux) : top 5 des numéros les plus
+   sortis (FREQ_NUMS) et des plus en retard (STATS_DATA.retard), basé sur les stats
+   déjà chargées. Aucune stats : aucun marquage, la grille reste nue. ===== */
+function chaudsFroids() {
+  let chauds = [], froids = [];
+  try { if (Array.isArray(FREQ_NUMS) && FREQ_NUMS.length) chauds = FREQ_NUMS.slice(0, 5).map((x) => x.n); } catch (e) {}
+  try { if (STATS_DATA && Array.isArray(STATS_DATA.retard) && STATS_DATA.retard.length) froids = STATS_DATA.retard.slice(0, 5).map((x) => x.n); } catch (e) {}
+  return { chauds, froids };
+}
+
+function renderCreate() {
+  // tant qu'aucun « Nombre de grilles » n'est choisi : les boules restent visibles,
+  // aucune pastille « Grille N », bouton Effacer grisé
+  $("#kpiGrilleEnCours").textContent = CREATE.nb
+    ? "Grille " + (CREATE.actif + 1) + " · " + CREATE.nums[CREATE.actif].length + "/5" + (CREATE.chance[CREATE.actif] ? " ★" : "")
+    : "Aucune grille";
+  $("#btnCreateClear").disabled = !CREATE.nb;
+  // pastilles de sélection de grille (avec état de remplissage) + corbeille pour supprimer UNE grille
+  // (les suivantes remontent : la 3 devient la 2, etc. ; dernière grille supprimée = onglet réinitialisé)
+  $("#createTabs").innerHTML = Array.from({ length: CREATE.nb }, (_, i) => {
+    const ok = grilleComplete(i);
+    return `<div style="display:flex; gap:4px; align-items:center">
+      <button type="button" class="pill${i === CREATE.actif ? " active" : ""}" data-g="${i}"${ok ? ' style="background:#0a7a0a; border-color:#0a7a0a; color:#fff; box-shadow:none"' : ""}>
+        Grille ${i + 1} · ${CREATE.nums[i].length}/5${CREATE.chance[i] ? " ★" : ""}</button>
+      <button type="button" data-del="${i}" data-tip="Supprimer la grille ${i + 1}"
+        style="background:none; border:none; cursor:pointer; font-size:10px; padding:2px; line-height:1; color:#c42b1c">❌</button>   <!-- même teinte que la corbeille de Mises & Gains -->
+    </div>`;
+  }).join("");
+  document.querySelectorAll("#createTabs .pill").forEach((p) =>
+    p.addEventListener("click", () => { CREATE.actif = +p.dataset.g; renderCreate(); }));
+  document.querySelectorAll("#createTabs [data-del]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const i = +b.dataset.del;
+      // on retire la grille i et les suivantes remontent d'un cran
+      CREATE.nums.splice(i, 1); CREATE.nums.push([]);
+      CREATE.chance.splice(i, 1); CREATE.chance.push(null);
+      CREATE.nb--;
+      // l'état « déjà complète » est recalculé : les grilles restantes ne rejouent pas l'effet pop
+      COMPLETE_DEJA = new Set(Array.from({ length: CREATE.nb }, (_, k) => k).filter(grilleComplete));
+      if (CREATE.nb <= 0) {
+        // dernière grille supprimée : réinitialisation complète de l'onglet (comme après un enregistrement)
+        CREATE.nb = 0; CREATE.actif = 0;
+        CREATE.nums = [[], [], [], [], []]; CREATE.chance = [null, null, null, null, null];
+        document.querySelectorAll(".create-nb").forEach((x) => x.classList.remove("active"));
+      } else if (CREATE.actif >= CREATE.nb) {
+        CREATE.actif = CREATE.nb - 1;   // la grille active était la supprimée : on prend la dernière
+      }
+      // la pastille « Nombre de grilles » reflète le nouveau compte :
+      // on supprimait la 5e de 5 -> la boule 5 se désélectionne, la 4 devient bleue
+      if (CREATE.nb >= 1) {
+        document.querySelectorAll(".create-nb").forEach((x) =>
+          x.classList.toggle("active", +x.dataset.nb === CREATE.nb));
+      }
+      renderCreate();
+    }));
+  // grille 7 x 7 des 49 numéros
+  const { chauds, froids } = chaudsFroids();   // 🔥 top 5 sorties / ❄️ top 5 retard
+  $("#chfLegend").style.display = (chauds.length || froids.length) ? "" : "none";
+  $("#createNums").innerHTML = Array.from({ length: 49 }, (_, i) => i + 1)
+    .map((n) => { const tip1 = infobulleNum(n, false);
+      const tag = chauds.includes(n) ? "🔥 Parmi les 5 les plus sortis" : froids.includes(n) ? "❄️ Parmi les 5 les plus en retard" : "";
+      const cls = (chauds.includes(n) ? " hot" : "") + (froids.includes(n) ? " cold" : "");
+      const tip = tip1 && tag ? tip1 + " · " + tag : (tip1 || tag);
+      return `<span class="pick-ball${CREATE.nums[CREATE.actif].includes(n) ? " sel" : ""}${cls}" data-n="${n}"${tip ? ` data-tip="${tip}"` : ""}>${n}</span>`; }).join("");
+  document.querySelectorAll("#createNums .pick-ball").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (!CREATE.nb) { showToast("⚠ Choisissez d'abord le nombre de grilles (1 à 5)"); return; }
+      const n = +b.dataset.n, cur = CREATE.nums[CREATE.actif];
+      if (cur.includes(n)) CREATE.nums[CREATE.actif] = cur.filter((x) => x !== n);
+      else { if (cur.length >= 5) { showToast("⚠ 5 numéros maximum par grille"); return; } cur.push(n); }
+      renderCreate();
+    }));
+  // N° Chance (un seul à la fois)
+  $("#createChance").innerHTML = Array.from({ length: 10 }, (_, i) => i + 1)
+    .map((n) => { const tip2 = infobulleNum(n, true); return `<span class="pick-ball chanceball${CREATE.chance[CREATE.actif] === n ? " sel" : ""}" data-c="${n}"${tip2 ? ` data-tip="${tip2}"` : ""}>${n}</span>`; }).join("");
+  document.querySelectorAll("#createChance .pick-ball").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (!CREATE.nb) { showToast("⚠ Choisissez d'abord le nombre de grilles (1 à 5)"); return; }
+      const c = +b.dataset.c;
+      CREATE.chance[CREATE.actif] = CREATE.chance[CREATE.actif] === c ? null : c;
+      renderCreate();
+    }));
+  // récapitulatif : les 5 grilles TOUJOURS affichées (même non retenues dans « Grilles à jouer »),
+  // le compteur « n° » se met à jour à chaque coche/validation
+  /* (4) l'effet « pop » ne joue QUE sur la grille qui vient d'être complétée :
+     on mémorise les grilles déjà complètes avant le rendu, seules les nouvelles s'animent */
+  const AVANT = COMPLETE_DEJA;
+  const completes = Array.from({ length: 5 }, (_, i) => i).filter(grilleComplete);
+  $("#createRecap").innerHTML = Array.from({ length: 5 }, (_, i) => {
+    const horsJeu = i >= CREATE.nb;   // au-delà du nombre choisi : grisée, non enregistrable
+    const nums = [...CREATE.nums[i]].sort((a, b) => a - b);
+    const ok = grilleComplete(i);
+    const nouvelle = ok && !AVANT.has(i);   // complète seulement depuis ce rendu
+    return `<div class="rec-line${ok ? " complete" : ""}${nouvelle ? " fresh" : ""}"${horsJeu ? ' style="opacity:.45"' : ""}>
+      <span class="rec-label">${ok ? "Grille " + (i + 1) + " ✅" : "Grille " + (i + 1)}</span>
+      <span class="rec-balls">${nums.map((n) => ballHTML(n, "ball")).join("")}${CREATE.chance[i] ? '<span class="plus">+</span>' + ballHTML(CREATE.chance[i], "chance ball") : ""}</span>
+      ${ok ? "" : `<span style="color:#8a8a8a; font-size:12px${horsJeu ? "; opacity:.45" : ""}">${nums.length} N°${CREATE.chance[i] ? " + ★" : ""}</span>`}
+    </div>`;
+  }).join("");
+  COMPLETE_DEJA = new Set(completes);   // mémorisation pour le prochain rendu
+  const nbc = completes.length;
+  /* 🎫 rappel ticket uniquement à la NOUVELLE complétion ET quand TOUTES les grilles choisies sont complètes */
+  if (completes.some((i) => !AVANT.has(i)) && CREATE.nb && nbc === CREATE.nb) toastTicket(nbc, "btnCreatePdf");
+  /* (2) 5 numéros cochés mais pas encore de N° Chance : le libellé pulse pour attirer l'œil */
+  const grillePleine = CREATE.nb && CREATE.nums[CREATE.actif].length === 5 && !CREATE.chance[CREATE.actif];
+  $("#chanceLabel").classList.toggle("chance-hint", !!grillePleine);
+  /* (6) date réelle d'enregistrement (prochain tirage) affichée sous le bouton */
+  try {
+    const iso = toISO(dateProchainTirage());
+    const [yy, mm, dd] = iso.split("-");
+    const s = nbc === 1 ? "" : "s";   // singulier si 1 grille remplie, pluriel sinon
+    $("#createSaveDate").textContent = CREATE.nb
+      ? (nbc > 1 ? "Mises enregistrées" : "Mise enregistrée") + " pour le tirage du " + dd + "/" + mm + "/" + yy
+      : "";
+  } catch (e) { /* date indisponible : pas d'affichage */ }
+  /* infos des 2 panneaux : grilles complètes (la grille en cours est gérée en tête de fonction) */
+  $("#kpiGrillesCompletes").textContent =
+    nbc + " sur " + CREATE.nb + " complète" + (nbc > 1 ? "s" : "") + " - " + fmt(nbc * PRIX_GRILLE) + " €";
+  $("#createInfo").textContent = nbc
+    ? `${nbc} grille${nbc > 1 ? "s" : ""} complète${nbc > 1 ? "s" : ""} - ${fmt(nbc * PRIX_GRILLE)} €`
+    : "Une grille est complète avec 5 numéros + N° Chance.";
+  $("#btnCreateSave").disabled = !nbc;
+  /* le bouton PDF reste TOUJOURS visible (grisé) : aucune variation de hauteur à la validation */
+  $("#btnCreatePdf").disabled = !nbc;
+  $("#btnCreateSave").textContent = nbc > 1
+    ? `💾 Enregistrer les ${nbc} mises (${fmt(nbc * PRIX_GRILLE)} €)` : "💾 Enregistrer la mise (2,20 €)";
+}
+/* pastilles 1-5 : nombre de grilles à jouer */
+document.querySelectorAll(".create-nb").forEach((p) => p.addEventListener("click", () => {
+  document.querySelectorAll(".create-nb").forEach((x) => x.classList.remove("active"));
+  p.classList.add("active");
+  CREATE.nb = +p.dataset.nb;
+  if (CREATE.actif >= CREATE.nb) CREATE.actif = 0;
+  renderCreate();
+}));
+/* 🧹 Effacer la grille en cours : vide UNIQUEMENT la grille sélectionnée
+   (la grille 1, même complète, n'est jamais effacée par erreur) */
+$("#btnCreateClear").addEventListener("click", () => {
+  CREATE.nums[CREATE.actif] = []; CREATE.chance[CREATE.actif] = null;
+  renderCreate();
+});
+/* 💾 Enregistrement des grilles complètes (date : prochain tirage) */
+$("#btnCreateSave").addEventListener("click", () => {
+  const iso = toISO(dateProchainTirage());
+  const [y, m, d] = iso.split("-");
+  const dMise = d + "/" + m + "/" + y;   // format de l'app
+  let ajoutees = 0, doublons = 0;
+  for (let i = 0; i < CREATE.nb; i++) {
+    if (!grilleComplete(i)) continue;
+    const nums = [...CREATE.nums[i]].sort((a, b) => a - b), chance = CREATE.chance[i];
+    if (estDoublon(dMise, nums, chance)) { doublons++; continue; }
+    bets.push({ id: ++uid, date: dMise, nums, chance, mise: PRIX_GRILLE, gain: 0, rang: null });
+    ajoutees++;
+  }
+  if (ajoutees) {
+    save(); renderBets();
+    // RÉINITIALISATION COMPLÈTE de l'onglet, comme le Générateur après « Effacer » :
+    // grilles vidées, aucune pastille active, aucun rectangle « Grille N - x/5 »
+    CREATE.nb = 0;
+    CREATE.actif = 0;
+    CREATE.nums = [[], [], [], [], []]; CREATE.chance = [null, null, null, null, null];
+    COMPLETE_DEJA = new Set();   // l'effet pop repartira de zéro au prochain remplissage
+    document.querySelectorAll(".create-nb").forEach((x) => x.classList.remove("active"));
+    renderCreate();
+  }
+  if (doublons) showToast(ajoutees + " mise" + (ajoutees > 1 ? "s" : "") + " enregistrée" + (ajoutees > 1 ? "s" : "") + " - " + doublons + " doublon" + (doublons > 1 ? "s" : "") + " ignoré" + (doublons > 1 ? "s" : "") + " ⚠");
+  else if (ajoutees) showToast(ajoutees + " mise" + (ajoutees > 1 ? "s" : "") + " enregistrée" + (ajoutees > 1 ? "s" : "") + " - " + fmt(ajoutees * PRIX_GRILLE) + " € ✓");
+  else showToast("Aucune grille complète à enregistrer");
+});
+renderCreate();
+
+/* ===== 🖨️ EXPORT PDF DIRECT : ticket FDJ partagé par Générateur / Faites vos jeux / Mise express ===== */
+function lotoTicketHTML(head, d, grids) {
+  let h = '<div class="ticket"><div class="t-head">*** LOTO(R) - ' + head + ' ***</div>' +
+    '<div class="t-date">Tirage du ' + d + ' &nbsp;-&nbsp; ' + grids.length + ' grille' + (grids.length > 1 ? 's' : '') +
+    ' &nbsp;-&nbsp; ' + fmt(grids.length * PRIX_GRILLE) + ' EUR</div>';
+  grids.forEach((g, n) => {
+    h += '<div class="t-grid"><span class="t-label">Grille ' + (n + 1) + '</span> : <span class="t-nums">' +
+      g.nums.map((x) => String(x).padStart(2, "0")).join(" ") + '</span> + <span class="t-chance">' + g.chance + '</span></div>';
+  });
+  h += '<div class="t-total">TOTAL : ' + grids.length + ' mise' + (grids.length > 1 ? 's' : '') + ' = ' +
+    fmt(grids.length * PRIX_GRILLE) + ' EUR</div>' +
+    '<div class="t-foot">Ticket indicatif : ce document n\'a aucune valeur officielle aupres de la FDJ, de ses revendeurs ou des buralistes.</div>' +
+    '<div class="t-foot">--- Application Loto Studio ---</div></div>';
+  return h;
+}
+function exportPdfTicket(h) {
+  /* GÉNÉRATION DIRECTE SANS FENÊTRE D'IMPRESSION : le PDF est créé en tâche de fond
+     (contourne les problèmes de l'imprimante virtuelle Adobe PDF). Dans un navigateur
+     classique (hors appli Electron), on retombe sur l'impression classique. */
+  if (window.pdfAPI && window.pdfAPI.export) {
+    const page = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
+      'body { margin: 0; background: #fff; }' +
+      '#printZone .ticket { border: 2px dashed #333; padding: 18px 22px; font-family: "Courier New", monospace; color: #111; max-width: 520px; margin: 0 auto; }' +
+      '#printZone .t-head { text-align: center; font-weight: 700; letter-spacing: 1px; }' +
+      '#printZone .t-date { text-align: center; margin: 4px 0 12px; }' +
+      '#printZone .t-grid { margin: 8px 0; white-space: nowrap; }' +
+      '#printZone .t-label { font-weight: 700; }' +
+      '#printZone .t-nums { font-size: 16px; font-weight: 700; letter-spacing: 2px; }' +
+      '#printZone .t-chance { color: #c42b1c; font-weight: 700; }' +
+      '#printZone .t-total { border-top: 1px dashed #333; margin-top: 12px; padding-top: 8px; font-weight: 700; }' +
+      '#printZone .t-foot { text-align: center; margin-top: 10px; font-size: 11px; color: #444; }' +
+      '#printZone .t-foot + .t-foot { margin-top: 2px; }' +
+      '</style></head><body><div id="printZone">' + h + '</div></body></html>';
+    pdfAPI.export(page).then((res) => {
+      if (res) showToast("PDF enregistré : " + res + " ✓");
+    }).catch(() => showToast("Export PDF impossible ✗"));
+  } else if (/Electron/i.test(navigator.userAgent)) {
+    /* appli Electron mais fichiers de l'appli pas encore mis à jour */
+    showToast("⚠ Remplacez aussi main.js et preload.js dans le dossier de l'appli, puis relancez-la");
+  } else {
+    /* navigateur classique : impression classique */
+    const z = document.getElementById("printZone");
+    if (z) z.innerHTML = h;
+    document.body.classList.add("printing");
+    window.print();
+    window.addEventListener("afterprint", () => { document.body.classList.remove("printing"); }, { once: true });
+  }
+}
+/* 🖨️ Générateur : ticket des grilles validées */
+$("#btnPrint").addEventListener("click", () => {
+  const sel = [...validees].sort((a, b) => a - b);   // uniquement les grilles validées
+  if (!sel.length) return;
+  const dISO = toISO(dateProchainTirage());
+  const [dY, dM, dD] = dISO.split("-");
+  const d = dD + "/" + dM + "/" + dY;
+  const grids = sel.map((i) => currentGrilles[i]);
+  exportPdfTicket(lotoTicketHTML("GRILLES VALIDEES", d, grids));
+});
+
+/* 🖨️ Faites vos jeux : ticket des grilles complètes (récapitulatif) */
+$("#btnCreatePdf").addEventListener("click", () => {
+  const grids = Array.from({ length: CREATE.nb }, (_, i) => i)
+    .filter(grilleComplete)
+    .map((i) => ({ nums: [...CREATE.nums[i]].sort((a, b) => a - b), chance: CREATE.chance[i] }));
+  if (!grids.length) return;
+  let d = "";
+  try {
+    const [y, m, dd] = toISO(dateProchainTirage()).split("-");
+    d = dd + "/" + m + "/" + y;
+  } catch (e) { d = "prochain tirage"; }
+  exportPdfTicket(lotoTicketHTML("FAITES VOS JEUX", d, grids));
+});
+
+/* 🖨️ Mise express : ticket de la grille saisie */
+$("#btnBetPdf").addEventListener("click", () => {
+  const nums = NUM_FIELDS.filter((f, i) => i < 5).map((f) => +f.value).filter((x) => x > 0).sort((a, b) => a - b);
+  const chance = +document.getElementById("fChance").value;
+  if (nums.length !== 5 || !chance) { showToast("Saisissez les 5 numéros et le N° Chance ✗"); return; }
+  let d = "";
+  const dv = document.getElementById("fDate").value;
+  if (dv) { const [y, m, dd] = dv.split("-"); d = dd + "/" + m + "/" + y; }
+  else d = "prochain tirage";
+  exportPdfTicket(lotoTicketHTML("MISE EXPRESS", d, [{ nums: nums, chance: chance }]));
+});
+
+$("#btnSave").addEventListener("click", () => {
+  const sel = [...validees].sort((a, b) => a - b);   // uniquement les grilles validées (panneau de droite)
+  if (!sel.length) return;
+  // DATE : le prochain tirage JOUABLE (après ~20 h 05 un jour de tirage, le tirage du soir
+  // n'est plus jouable : la mise est datée pour le tirage suivant, comme la Mise express)
+  const dISO = toISO(dateProchainTirage());
+  const [dY, dM, dD] = dISO.split("-");
+  const d = dD + "/" + dM + "/" + dY;
+  let ajoutees = 0, doublons = 0;
+  for (const i of sel) {
+    const g = currentGrilles[i];
+    if (estDoublon(d, g.nums, g.chance)) { doublons++; continue; }
+    bets.push({ id: ++uid, date: d, nums: g.nums, chance: g.chance, mise: PRIX_GRILLE, gain: 0, rang: null });
+    ajoutees++;
+  }
+  if (ajoutees) { save(); renderBets(); }
+  if (doublons) showToast(ajoutees + " mise" + (ajoutees > 1 ? "s" : "") + " enregistrée" + (ajoutees > 1 ? "s" : "") + " - " + doublons + " doublon" + (doublons > 1 ? "s" : "") + " ignoré" + (doublons > 1 ? "s" : "") + " ⚠");
+  else if (ajoutees) showToast(ajoutees + " mise" + (ajoutees > 1 ? "s" : "") + " enregistrée" + (ajoutees > 1 ? "s" : "") + " - " + fmt(ajoutees * PRIX_GRILLE) + " € ✓");
+  if (ajoutees) {   // remise à zéro complète : les grilles validées viennent d'être enregistrées
+    currentGrilles = [];
+    validees = new Set();
+    renderGenOut(); renderGenRecap();
+    $("#btnClear").disabled = true;
+    $("#btnGen").disabled = true;
+    nbGrilles = 0;
+    document.querySelectorAll("#view-gen .pill").forEach((x) => x.classList.remove("active"));
+  }
+});
+
+/* ===== TIRAGES PAR DATE : halo uniquement quand la date de la mise correspond à un tirage ===== */
+const MOIS = { janvier:0, "février":1, mars:2, avril:3, mai:4, juin:5, juillet:6, "août":7, septembre:8, octobre:9, novembre:10, "décembre":11 };
+function dateKeyDe(txt) {   // "mercredi 14 octobre 2026" -> "14/10/2026"
+  const m = String(txt || "").match(/(\d{1,2})\s+([a-zéûè]+)\s+(\d{4})/i);
+  if (!m || !(m[2].toLowerCase() in MOIS)) return null;
+  return String(+m[1]).padStart(2, "0") + "/" + String(MOIS[m[2].toLowerCase()] + 1).padStart(2, "0") + "/" + m[3];
+}
+function construitTiragesParDate() {
+  const tirs = {};
+  let HIST = [];
+  try { if (STATS_DATA && Array.isArray(STATS_DATA.history)) HIST = STATS_DATA.history; } catch (e) { /* STATS_DATA pas encore déclaré */ }
+  // normalisation : l'historique FDJ utilise « nums », le tirage courant « numeros »
+  HIST.forEach((h) => { tirs[h.date] = { date: h.date, numeros: h.numeros || h.nums, chance: h.chance }; });
+  const dk = dateKeyDe(DERNIER_TIRAGE.date);
+  if (dk && !tirs[dk]) tirs[dk] = { date: dk, numeros: DERNIER_TIRAGE.numeros, chance: DERNIER_TIRAGE.chance };
+  return tirs;
+}
+/* reste avant la clôture (20 h 15), format "Xh YYmn ZZs" */
+function resteAvantCloture() {
+  const n = new Date();
+  const r = (20 * 3600 + 15 * 60) - (n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds());
+  if (r <= 0) return "0h 00mn 00s";
+  const h = Math.floor(r / 3600), mn = Math.floor((r % 3600) / 60), sec = r % 60;
+  return String(h).padStart(2, "0") + "h " + String(mn).padStart(2, "0") + "mn " + String(sec).padStart(2, "0") + "s";   /* heures sur 2 chiffres : la longueur ne change jamais */
+}
+/* ================= DERNIER TIRAGE ================= */
+function renderTirage() {
+  $("#dtTitle").textContent = "🎯 Dernier tirage du " + DERNIER_TIRAGE.date;
+  // statut du tirage du soir (tirages lundi / mercredi / samedi, résultats ~20 h 35)
+  const now = new Date();
+  const soirDeTirage = [1, 3, 6].includes(now.getDay());   // 1=lundi, 3=mercredi, 6=samedi
+  const t = now.getHours() * 60 + now.getMinutes();
+  let st = "";
+  if (soirDeTirage && t >= 1215 && t < 1235) st = "🔴 Tirage en cours - Résultats disponibles vers 20 h 35";
+  else if (soirDeTirage && t < 1140) st = "🟢 Tirage ce soir - Il vous reste " + resteAvantCloture() + " avant la clôture de la prise des jeux";
+  else if (soirDeTirage && t < 1170) st = "🟠 Tirage ce soir - Il vous reste " + resteAvantCloture() + " avant la clôture de la prise des jeux";
+  else if (soirDeTirage && t < 1215) st = "🔴 Tirage ce soir - Il vous reste " + resteAvantCloture() + " avant la clôture de la prise des jeux";
+  $("#dtStatus").textContent = st;
+  // compte à rebours actualisé chaque seconde (jour de tirage, avant la clôture de 20 h 15)
+  if (!window._timerCloture) window._timerCloture = setInterval(() => {
+    const n = new Date();
+    if (![1, 3, 6].includes(n.getDay())) { $("#dtStatus").textContent = ""; return; }   // 1=lundi, 3=mercredi, 6=samedi
+    const tc = n.getHours() * 60 + n.getMinutes();
+    if (tc >= 1215 && tc < 1235) $("#dtStatus").textContent = "🔴 Tirage en cours - Résultats disponibles vers 20 h 35";
+    else if (tc < 1140) $("#dtStatus").textContent = "🟢 Tirage ce soir - Il vous reste " + resteAvantCloture() + " avant la clôture de la prise des jeux";
+    else if (tc < 1170) $("#dtStatus").textContent = "🟠 Tirage ce soir - Il vous reste " + resteAvantCloture() + " avant la clôture de la prise des jeux";
+    else if (tc < 1215) $("#dtStatus").textContent = "🔴 Tirage ce soir - Il vous reste " + resteAvantCloture() + " avant la clôture de la prise des jeux";
+    else $("#dtStatus").textContent = "";
+  }, 1000);
+  // rappel du prochain tirage : identique dans Générateur, Dernier tirage et Mises & Gains
+  const nextHTML = DERNIER_TIRAGE.prochain
+    ? '🎯 Prochain tirage : <span class="nextDraw">' + DERNIER_TIRAGE.prochain.date +
+      " - Jackpot de " + DERNIER_TIRAGE.prochain.jackpot + "</span> (clôture 20 h 15)"
+    : "";
+  $("#genJackpot").innerHTML = nextHTML;
+  $("#misesNextDraw").innerHTML = nextHTML;
+  $("#createNextDraw").innerHTML = nextHTML;
+  // halo uniquement sur les numéros sortis ET joués dans une mise de cette même date
+  const dkTirage = dateKeyDe(DERNIER_TIRAGE.date);
+  const misesDuJour = bets.filter((b) => b.date === dkTirage);
+  const nbGrillesJour = misesDuJour.length;   // compteur de grilles jouées pour ce tirage ( confort n°9 )
+  const gainJour = misesDuJour.reduce((a, b) => a + (b.gain || 0), 0);   // gains connus pour ce tirage
+  const joues = new Set(misesDuJour.flatMap((b) => b.nums));
+  const chanceJouee = misesDuJour.some((b) => b.chance === DERNIER_TIRAGE.chance);
+  $("#dtBalls").innerHTML = [...DERNIER_TIRAGE.numeros].sort((a, b) => a - b).map((n) => ballHTML(n, "ball-lg" + (joues.has(n) ? " winner" : ""))).join("") + ballHTML(DERNIER_TIRAGE.chance, "chance ball-lg" + (chanceJouee ? " winner" : ""));
+  const won = DERNIER_TIRAGE.jackpotWon === true;
+  const next = DERNIER_TIRAGE.prochain;
+  // gagnants du tirage (fournis par la FDJ depuis l'actualisation des résultats)
+  const g1 = DERNIER_TIRAGE.gagnantsRang1;                       // gagnants au rang 1 (5 numéros + Chance)
+  const gain1 = typeof DERNIER_TIRAGE.gainRang1 === "number" ? fmt(DERNIER_TIRAGE.gainRang1) : null;
+  const gt = DERNIER_TIRAGE.totalGagnants;                       // gagnants tous rangs confondus
+  $("#dtInfo").innerHTML =
+    (nbGrillesJour
+      ? `🍀 Vous avez joué ${nbGrillesJour} grille${nbGrillesJour > 1 ? "s" : ""} pour ce tirage.<br>`
+      : `ℹ️ Aucune grille enregistrée pour ce tirage.<br>`) +
+    (nbGrillesJour && gainJour > 0
+      ? `💶 Pour ce tirage vous avez remporté : <b>${fmt(gainJour)} €</b><br>`
+      : "") +
+    `💰 Jackpot mis en jeu : <b>${DERNIER_TIRAGE.jackpot}</b><br>` +
+    (won
+      ? `🎉 Jackpot remporté ${g1 != null ? " par " + g1 + " gagnant" + (g1 > 1 ? "s" : "") + " au rang 1" + (gain1 ? " : " + gain1 + " €" + (g1 > 1 ? " chacun" : "") : "") : ""} <br>`
+      : `😐 Personne n'a trouvé les 6 numéros - jackpot remis en jeu.<br>`) +
+    (gt != null
+      ? `🏆 ${gt.toLocaleString("fr-FR")} gagnant${gt > 1 ? "s" : ""} sur ce tirage (tous rangs)<br>`
+      : "") +
+    (next
+      ? `<span class="nextDraw">🎯 Prochain tirage : ${next.date} - Jackpot de ${next.jackpot} (clôture 20 h 15)</span>`
+      : "");
+  // tableau des gains par rang : rempli depuis les données de l'Actualiser ou de
+  // last-draw.json, sinon message explicite.
+  // Chez la FDJ, les rangs 9 (1 numéro + Chance) et 10 (Chance seule) gagnent TOUS
+  // DEUX 2,20 € : le site les affiche sur une LIGNE COMMUNE et son JSON ne fournit
+  // que 9 divisions. On gère les deux cas, avec assainissement : si la 10e entrée
+  // annonce un montant énorme (ex : codes Loto à 20 000 € d'une ancienne version),
+  // c'est une donnée polluée -> on la retire et on fusionne la dernière ligne.
+  let rg = Array.isArray(DERNIER_TIRAGE.rangs) ? DERNIER_TIRAGE.rangs.filter((r) => r && typeof r.winners === "number").slice(0, 10) : [];
+  if (rg.length === 10 && rg[9].amount !== 2.2) rg = rg.slice(0, 9);
+  const ligneRang = (n, r) =>
+    `<tr${n === 1 && r.winners > 0 ? ' class="rang1-won"' : ""}><td style="text-align:left">Rang ${n} <span style="color:#5c5c5c; font-weight:500">: ${RANGS[n] || ""}</span>${n === 1 && r.winners > 0 ? '<span class="badge-jackpot">🎉 Jackpot gagné !</span>' : ""}</td>` +
+    `<td style="text-align:right">${(r.winners || 0).toLocaleString("fr-FR")}</td>` +
+    `<td style="text-align:right; font-weight:600">${typeof r.amount === "number" ? fmt(r.amount) + " €" : "—"}</td></tr>`;
+  document.querySelector("#dtRangs tbody").innerHTML = rg.length >= 9
+    ? rg.slice(0, 8).map((r, i) => ligneRang(i + 1, r)).join("") +
+      (rg.length === 10
+        ? ligneRang(9, rg[8]) + ligneRang(10, rg[9])
+        : `<tr><td style="text-align:left">Rang 9 <span style="color:#5c5c5c; font-weight:500">: 1 numéro + N° Chance</span><br>Rang 10 <span style="color:#5c5c5c; font-weight:500">: 0 numéro + N° Chance</span></td>` +
+          `<td style="text-align:right">${(rg[8].winners || 0).toLocaleString("fr-FR")}</td>` +
+          `<td style="text-align:right; font-weight:600">${typeof rg[8].amount === "number" ? fmt(rg[8].amount) + " €" : "—"}</td></tr>`)
+    : '<tr><td colspan="3" style="color:#8a8a8a">Actualisez les résultats (bouton 🔄) pour afficher les grilles gagnantes et les gains de chaque rang.</td></tr>';
+}
+renderTirage();
+
+/* ===== PERSISTANCE DU DERNIER TIRAGE (last-draw.json) ===== */
+(async () => {
+  if (!(isElectron && window.drawAPI)) return;
+  try {
+    const saved = await window.drawAPI.load();
+    if (saved && Array.isArray(saved.numeros) && saved.numeros.length === 5) {
+      Object.assign(DERNIER_TIRAGE, saved);
+      renderTirage(); TIRAGES_PAR_DATE = construitTiragesParDate();
+      if (typeof majFreqAvecTirageRecent === "function") majFreqAvecTirageRecent();   // compteurs des Statistiques à jour dès l'ouverture
+      if (typeof renderBets === "function") renderBets();   // re-rendu : les halos utilisent le vrai tirage
+    }
+  } catch (e) { /* aucune donnée sauvegardée : on garde les valeurs par défaut */ }
+})();
+
+/* ===== ACTUALISATION AUTOMATIQUE (source : page officielle FDJ) ===== */
+$("#btnRefresh").addEventListener("click", async () => {
+  const btn = $("#btnRefresh");
+  if (btn.disabled) return;
+  btn.disabled = true; btn.classList.add("loading");
+  try {
+    if (!(isElectron && window.lotoAPI)) {
+      throw new Error("Le bouton Actualiser nécessite la mise à jour de main.js et preload.js (voir instructions).");
+    }
+    const d = await window.lotoAPI.fetchResults();
+    if (!d || !Array.isArray(d.numeros) || d.numeros.length !== 5) throw new Error("réponse invalide");
+    // l'annonce « prochain tirage » n'est pas toujours présente dans la page :
+    // on garde la précédente au lieu de l'effacer
+    Object.assign(DERNIER_TIRAGE, d, { prochain: d.prochain || DERNIER_TIRAGE.prochain });
+    renderTirage();
+    majFreqAvecTirageRecent();   // Statistiques : le tirage tout juste récupéré est compté immédiatement
+    majDateProchainTirage();   // date picker recalé sur le prochain tirage annoncé
+    TIRAGES_PAR_DATE = construitTiragesParDate(); renderBets();   // halos recalculés immédiatement
+    if (window.drawAPI) window.drawAPI.save({ ...DERNIER_TIRAGE });   // mémorisé pour la prochaine ouverture
+    const today = new Date().toLocaleDateString("fr-FR");
+    const sb = document.querySelector(".statusbar span");
+    sb.textContent = sb.textContent.replace(/\d{2}\/\d{2}\/\d{4}/, today);
+    showToast("Résultats actualisés : " + [...d.numeros].sort((a, b) => a - b).join(", ") + " + " + d.chance + " ✓");
+  } catch (e) {
+    alert("Impossible de récupérer les résultats.\n\nVérifiez votre connexion Internet, ou la page FDJ a peut-être changé de structure.\n\nDétail : " + e.message);
+  }
+  btn.disabled = false; btn.classList.remove("loading");
+});
+
+/* ===== VÉRIFICATION AUTOMATIQUE DES GRILLES ===== */
+function rangDe(nums, chance, tirage) {
+  const ok = nums.filter((n) => tirage.numeros.includes(n)).length;
+  const chanceOk = chance === tirage.chance;
+  if (ok === 5) return chanceOk ? 1 : 2;
+  if (ok === 4) return chanceOk ? 3 : 4;
+  if (ok === 3) return chanceOk ? 5 : 6;
+  if (ok === 2) return chanceOk ? 7 : 8;
+  if (ok === 1) return chanceOk ? 9 : null;
+  if (ok === 0) return chanceOk ? 10 : null;
+  return null;
+}
+/* ===== MODALE DE SAISIE (prompt() n'est pas supporté par Electron) ===== */
+function askGain(title, message, def) {
+  return new Promise((resolve) => {
+    const ov = document.getElementById("modalOverlay");
+    document.getElementById("modalTitle").textContent = title;
+    document.getElementById("modalMsg").innerHTML = message;
+    const inp = document.getElementById("modalInput");
+    inp.value = def; ov.classList.add("open"); inp.focus(); inp.select();
+    const done = (val) => {
+      ov.classList.remove("open");
+      document.getElementById("modalOk").onclick = document.getElementById("modalCancel").onclick = inp.onkeydown = null;
+      resolve(val);
+    };
+    const readInput = () => inp.value.trim().replace(/\s/g, "").replace("€", "").replace(",", ".");
+    const validInput = (v) => { const n = parseFloat(v); return v !== "" && !isNaN(n) && n > 0; };
+    document.getElementById("modalOk").onclick = () => { const v = readInput(); if (validInput(v)) done(v); else { inp.style.borderBottom = "2px solid #c42b1c"; inp.focus(); } };
+    document.getElementById("modalCancel").onclick = () => done(null);
+    inp.onkeydown = (e) => { if (e.key === "Enter") { const v = readInput(); if (validInput(v)) done(v); else { inp.style.borderBottom = "2px solid #c42b1c"; } } if (e.key === "Escape") done(null); };
+    inp.oninput = () => { inp.style.borderBottom = ""; };
+  });
+}
+window.setGainModal = async (id, rang) => {
+  const g = await askGain("Gain au rang " + rang + " (" + RANGS[rang] + ")", "Gain en € :", "0");
+  if (g !== null) setGain(id, g, rang);
+};
+$("#btnCheck").addEventListener("click", async () => {
+  // CORRECTION : chaque mise est vérifiée contre le tirage de SA PROPRE date
+  // (l'historique connu), jamais contre le dernier tirage si sa date diffère.
+  const tirageDe = (b) => {
+    const t = (typeof TIRAGES_PAR_DATE !== "undefined" && TIRAGES_PAR_DATE[b.date]) || null;
+    return t;   // null : date inconnue -> on ne peut rien conclure, on ne demande rien
+  };
+  const dkDernier = dateKeyDe(DERNIER_TIRAGE.date);
+  const aRegler = bets.filter((b) => b.gain === 0 &&
+    ((b.date === dkDernier && rangDe(b.nums, b.chance, DERNIER_TIRAGE) !== null) ||
+     (tirageDe(b) && rangDe(b.nums, b.chance, tirageDe(b)) !== null)));
+  const dejaReglees = bets.filter((b) => b.gain > 0).length;
+  if (!aRegler.length) { showToast(dejaReglees ? "Aucune grille gagnante à vérifier : " + dejaReglees + " déjà encaissée" + (dejaReglees > 1 ? "s" : "") + " ✓" : "Aucune grille gagnante à vérifier (ou dates de tirage inconnues) ✓"); showRecapTirage(dkDernier); return; }
+  let gagnantes = 0, perdantes = 0;
+  for (const b of aRegler) {
+    const t = (b.date === dkDernier) ? DERNIER_TIRAGE : tirageDe(b);
+    if (!t) { perdantes++; continue; }
+    const rang = rangDe(b.nums, b.chance, t);
+    if (rang === null) { perdantes++; continue; }
+    const g = await askGain("Rang " + rang + " — " + RANGS[rang] + " !",
+      "Grille du " + b.date + " : " + b.nums.join(", ") + " + " + b.chance + "<br><br>Gain en € (saisissez le montant, ex. 6,20) :", "0");
+    if (g === null) continue;   // annulé : on réglera plus tard
+    setGain(b.id, g, rang);
+    if (parseFloat(g) > 0) gagnantes++;
+  }
+  showToast(gagnantes + " grille" + (gagnantes > 1 ? "s gagnantes" : " gagnante") + ", " + perdantes + " perdante" + (perdantes > 1 ? "s" : "") + ", " + dejaReglees + " déjà encaissée" + (dejaReglees > 1 ? "s" : "") + " 🎱");
+  showRecapTirage(dkDernier);   // récap complet du dernier tirage
+});
+
+/* ===== RÉCAP : comparaison du DERNIER tirage avec les grilles enregistrées (Mises & Gains) ===== */
+function showRecapTirage(dk) {
+  const t = DERNIER_TIRAGE;
+  const mes = bets.filter((b) => b.date === dk);
+  if (!mes.length) {
+    showToast("Aucune grille enregistrée pour le tirage du " + dk + " : enregistrez vos mises dans l'onglet 💶 Mises & Gains");
+    return;
+  }
+  let tM = 0, tG = 0, gagnantes = 0, aSaisir = 0, nbGains = 0;
+  const lignes = mes.map((b) => {
+    tM += b.mise; tG += b.gain;
+    if (b.gain > 0) nbGains++;
+    const rang = rangDe(b.nums, b.chance, t);
+    const ok = rang !== null;
+    if (ok) gagnantes++;
+    if (ok && b.gain === 0) aSaisir++;
+    const balls = b.nums.map((n) => ballHTML(n, "ball-xs" + (t.numeros.includes(n) ? " winner" : ""))).join("")
+      + ballHTML(b.chance, "chance ball-xs" + (t.chance === b.chance ? " winner" : ""));
+    const verdict = ok
+      ? "Rang " + rang + " · " + RANGS[rang] + (b.gain > 0 ? " · " + fmt(b.gain) + " € encaissés" : " · gain à saisir")
+      : "Perdante";
+    return `<div style="display:flex; align-items:center; justify-content:space-between; gap:6px 12px; flex-wrap:wrap; border-top:1px solid rgba(0,0,0,.08); padding:7px 0">
+      <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; flex:0 1 auto; min-width:0">${balls}</div>   <!-- même écartement de boules que la modale de l'onglet Historique (6px) -->
+      <div${ok ? ' class="gain-cell"' : ""} style="text-align:right; font-size:12.5px; flex:1 1 auto; min-width:120px; font-weight:${ok ? 700 : 400}; color:${ok ? "#0a7a0a" : "#8a8a8a"}">${verdict}</div></div>`;
+  }).join("");
+  const bilan = tG - tM;
+  $("#recapBody").innerHTML =
+    `<p style="margin:0 0 10px; font-size:13px; color:#5c6b82">Tirage du ${dk} : ${t.numeros.join(", ")} + N° Chance ${t.chance} <br/> ${mes.length} grille${mes.length > 1 ? "s" : ""} enregistrée${mes.length > 1 ? "s" : ""}</p>`
+    + `<div style="width:100%">${lignes}</div>`
+    + `<p style="margin:12px 0 0; font-size:13.5px; font-weight:600">${mes.length > 1 ? "Mises" : "Mise"} : ${fmt(tM)} € · ${nbGains > 1 ? "Gains encaissés" : "Gain encaissé"} : ${fmt(tG)} € · Bilan : `
+    + `<span${bilan >= 0 ? ' class="gain-cell"' : ""} style="color:${bilan >= 0 ? "#0a7a0a" : "#c42b1c"}">${(bilan >= 0 ? "+" : "") + fmt(bilan)} €</span></p>`
+    + (aSaisir ? `<p style="margin:6px 0 0; font-size:13px; color:#c42b1c">💶 ${aSaisir} grille${aSaisir > 1 ? "s gagnantes" : " gagnante"} sans gain enregistré (onglet 💶 Mises & Gains)</p>` : "");
+  $("#recapTitle").textContent = "✅ Vérification - " + gagnantes + " grille" + (gagnantes > 1 ? "s gagnantes" : " gagnante") + " sur " + mes.length;
+  document.getElementById("recapOverlay").classList.add("open");
+}
+$("#recapOk").addEventListener("click", () => document.getElementById("recapOverlay").classList.remove("open"));
+
+/* ================= STATISTIQUES ================= */
+let STATS_DATA = null;   // payload complet (retard, historique) pour les sections annexes
+/* ===== (10) DÉTAIL D'UN NUMÉRO : dates de sortie dans l'historique connu ===== */
+window.showNumDetail = (n, isChance) => {
+  document.getElementById("ndBets").innerHTML = "";   // résidu éventuel d'un détail de tirage
+  let hist = histAvecTirageRecent();   // historique des stats + dernier tirage connu fusionné
+  // COHÉRENCE : la fenêtre d'analyse des compteurs s'arrête au nbTirages de la
+  // dernière actualisation (année glissante). On restreint l'historique aux
+  // nbTirages tirages les plus récents pour compter sur la même base exacte.
+  const nb = (STATS_DATA && +STATS_DATA.nbTirages) || hist.length;
+  hist = hist.slice(0, Math.max(1, Math.min(hist.length, nb)));
+  // CORRECTION : un N° Chance ne compte QUE les tirages où h.chance === n
+  // (avant, les grilles contenant la boule n° n étaient comptées en plus).
+  const sorties = hist.filter((h) => isChance ? h.chance === n : (h.numeros || h.nums).includes(n));
+  const label = isChance ? "N° Chance " + n : "Numéro " + n;
+  document.getElementById("ndTitle").textContent = "🎯 " + label;
+  if (!sorties.length) {
+    document.getElementById("ndInfo").innerHTML = "Aucune sortie connue dans l'historique.";
+    document.getElementById("ndDates").innerHTML = "";
+  } else {
+    const nb = hist.length;
+    document.getElementById("ndInfo").innerHTML =
+      `<b>${sorties.length} sortie${sorties.length > 1 ? "s" : ""}</b> sur ${nb} tirages connus (${Math.round(1000 * sorties.length / nb) / 10} %)<br>` +
+      `Dernière sortie : <b>${sorties[0].date}</b>` + (sorties.length > 1 ? ` · avant : ${sorties[1].date}` : "");
+    document.getElementById("ndDates").innerHTML =
+      `<div style="font-size:11px; color:#8a8a8a; width:100%">Dates de sortie (du plus récent au plus ancien) :</div>` +
+      sorties.slice(0, 15).map((h) => `<span>${h.date}</span>`).join("") +
+      (sorties.length > 15 ? `<span style="background:none">+ ${sorties.length - 15} autres…</span>` : "");
+  }
+  document.getElementById("numDetail").classList.add("open");
+};
+document.querySelectorAll("[data-tri]").forEach((b) => b.addEventListener("click", () => {
+  STATS_TRI = b.getAttribute("data-tri");
+  document.querySelectorAll("[data-tri]").forEach((x) => x.classList.toggle("active", x === b));
+  renderStats();
+}));
+
+/* ===== HISTORIQUE : détail complet d'un tirage (boules, grilles jouées, gains) ===== */
+window.showTirageDetail = (d) => {
+  const h = histAvecTirageRecent().find((x) => x.date === d);
+  if (!h) return;
+  const nums = (h.numeros || h.nums).slice().sort((a, b) => a - b);
+  const mesBets = bets.filter((b) => b.date === d);
+  const jouesN = new Set(), jouesC = new Set();
+  mesBets.forEach((b) => { b.nums.forEach((n) => jouesN.add(n)); jouesC.add(b.chance); });
+  const total = mesBets.reduce((a, b) => a + (+b.gain || 0), 0);
+  document.getElementById("ndTitle").textContent = "🎯 Tirage du " + d;
+  document.getElementById("ndInfo").innerHTML =
+    `<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:10px 0">` +
+    nums.map((n) => ballHTML(n, "ball" + (jouesN.has(n) ? " winner" : ""))).join("") +
+    ballHTML(h.chance, "chance ball" + (jouesC.has(h.chance) ? " winner" : "")) + `</div>` +
+    `<div style="font-size:13px">` +
+    (mesBets.length
+      ? `Ce jour-là vous avez joué ${mesBets.length} grille${mesBets.length > 1 ? "s" : ""} → Gain : ` +
+        (total > 0 ? `<b class="gain-cell" style="color:#0a7a0a">+${fmt(total)} €</b>` : `<b class="red">0,00 €</b>`)
+      : `Aucune grille jouée pour ce tirage.`) + `</div>`;
+  document.getElementById("ndDates").innerHTML = "";   // pas de dates de sortie ici
+  // grilles jouées dans un conteneur DÉDIÉ (hors .dates : les boules restent rondes,
+  // le style des puces de dates ne s'applique plus à elles)
+  document.getElementById("ndBets").innerHTML = mesBets.length
+    ? `<div style="font-size:11px; color:#8a8a8a; margin:-4px 0 10px">${mesBets.length === 1 ? "Votre grille pour ce tirage : " : "Vos grilles pour ce tirage :"}</div>` +
+      mesBets.map((b) => {
+        const gBalls = [...b.nums].sort((x, y) => x - y)
+          .map((n) => ballHTML(n, "ball-sm" + (nums.includes(n) ? " winner" : ""))).join("") +
+          ballHTML(b.chance, "chance ball-sm" + (h.chance === b.chance ? " winner" : ""));
+        const res = b.rang != null ? `Rang ${b.rang} ` : "";
+        const g = b.gain > 0 ? `: <b class="gain-cell" style="color:#0a7a0a">+${fmt(b.gain)} €</b>` : "→ Aucun gain";
+        return `<div style="display:flex; align-items:center; gap:6px; margin-bottom:6px">${gBalls}<span style="font-size:12.5px; margin-left:4px">${res}${g}</span></div>`;
+      }).join("")
+    : "";
+  document.getElementById("numDetail").classList.add("open");
+};
+
+document.getElementById("numDetail").addEventListener("click", (e) => {   // clic sur le fond : fermer
+  if (e.target.id === "numDetail") e.currentTarget.classList.remove("open");
+});
+let STATS_TRI = "desc";   // tri des boules bleues : "desc" | "asc" | "num"
+function renderStats() {
+  // tri d'affichage des boules bleues (l'ordre de FREQ_NUMS reste intact pour le générateur)
+  const triNums = STATS_TRI === "num" ? (x, y) => x.n - y.n
+    : STATS_TRI === "asc" ? (x, y) => x.s - y.s || x.n - y.n
+    : (x, y) => y.s - x.s || x.n - y.n;
+  const affNums = [...FREQ_NUMS].sort(triNums);
+  const maxS = Math.max(1, ...FREQ_NUMS.map((x) => x.s));
+  // lecture en COLONNES (haut en bas) pour les boules bleues : 3 colonnes remplies de haut en bas,
+  // la 1ère colonne contient les numéros les plus sortis. Recalculé à chaque rendu (liste variable).
+  // grille du TOP 20 uniquement (3 colonnes, lecture de haut en bas)...
+  const top20 = affNums.slice(0, 20);
+  const nbLignes = Math.ceil(top20.length / 3);
+  const g = $("#statsNums");
+  g.style.gridAutoFlow = "column";
+  g.style.gridTemplateRows = "repeat(" + nbLignes + ", auto)";
+  $("#statsNums").innerHTML = top20.map(({ n, s }) =>
+    `<div class="freq-row"><span class="num-click" onclick="showNumDetail(${n}, false)" data-tip="Voir les sorties du numéro ${n}">${ballHTML(n, "ball-sm")}</span><div class="freq-bar"><div class="freq-fill" style="width:${(s / maxS) * 100}%"></div></div><span style="width:22px; text-align:right; font-weight:600">${s}</span></div>`).join("");
+  // ...et les autres boules BLEUES sur une ligne aérée, avec infobulle + modale (comme le top 20).
+  // Tant que les stats ne sont pas actualisées, la valeur par défaut ne connaît que 20 numéros :
+  // on affiche alors un message explicite au lieu d'une zone vide.
+  const rest = affNums.slice(20);
+  const titre = $("#statsRestTitle");
+  if (rest.length) {
+    titre.style.display = "";
+    $("#statsRest").innerHTML = rest.map(({ n, s }) =>
+      `<div style="text-align:center"><span class="num-click" onclick="showNumDetail(${n}, false)" data-tip="Voir les sorties du numéro ${n}">${ballHTML(n, "ball")}</span><div style="font-size:12px; color:#5c5c5c; margin-top:4px">${s}×</div></div>`).join("");
+  } else {
+    titre.style.display = "";
+    $("#statsRest").innerHTML = '<span style="font-size:13px; color:#8a8a8a">Actualisez les statistiques (bouton 🔄) pour afficher les 29 autres numéros avec leur nombre de sorties.</span>';
+  }
+  $("#statsChance").innerHTML = FREQ_CHANCE.map(({ n, s }) =>
+    `<div style="text-align:center"><span class="num-click" onclick="showNumDetail(${n}, true)" data-tip="Voir les sorties du N° Chance ${n}">${ballHTML(n, "chance ball")}</span><div style="font-size:12px; color:#5c5c5c; margin-top:4px">${s}×</div></div>`).join("");
+  // numéros en retard
+  const ret = STATS_DATA && Array.isArray(STATS_DATA.retard) ? STATS_DATA.retard : [];
+  $("#statsRetard").innerHTML = ret.length
+    ? ret.map(({ n, absents }) =>
+        `<div style="text-align:center">${ballHTML(n, "ball")}<div style="font-size:12px; color:#c42b1c; margin-top:4px; font-weight:600">${absents} tirage${absents > 1 ? "s" : ""}</div></div>`).join("")
+    : '<span style="font-size:13px; color:#8a8a8a">Actualisez les statistiques pour afficher les numéros en retard.</span>';
+  // historique des stats + DERNIER TIRAGE connu fusionné : le tirage du jour apparaît toujours
+  const hist = histAvecTirageRecent();
+  const joues = {};   // "14/10/2026" -> { nums:Set, chance:Set }
+  const gains = {};   // "14/10/2026" -> total gagné ce jour-là (mention « Gains » de l'historique)
+  bets.forEach((b) => {
+    (joues[b.date] = joues[b.date] || { nums: new Set(), chance: new Set() });
+    b.nums.forEach((n) => joues[b.date].nums.add(n));
+    joues[b.date].chance.add(b.chance);
+    gains[b.date] = (gains[b.date] || 0) + (+b.gain || 0);
+  });
+  $("#histList").innerHTML = hist.length
+    ? hist.slice(0, 30).map((h) => {   // affichage : 30 derniers tirages (l'app connaît toute l'année + cumul)
+        const j = joues[h.date];
+        return `<div class="freq-row" style="flex-wrap:wrap"><span style="width:92px; flex:none">${h.date}</span><div style="display:flex; gap:4px; align-items:center; cursor:pointer" onclick="showTirageDetail('${h.date}')" data-tip="Cliquez : détail du tirage">` +
+        [...(h.numeros || h.nums)].sort((a, b) => a - b).map((n) => ballHTML(n, "ball-sm" + (j && j.nums.has(n) ? " winner" : ""))).join("") +
+        ballHTML(h.chance, "chance ball-sm" + (j && j.chance.has(h.chance) ? " winner" : "")) + `</div>` +
+        ((gains[h.date] || 0) > 0 ? `<span class="hist-gain">+${fmt(gains[h.date])} €</span>` : "") + `</div>`;
+      }).join("")
+    : '<span style="font-size:13px; color:#8a8a8a">Actualisez les statistiques pour afficher l\'historique des tirages.</span>';
+}
+/* ===== INFOBULLES : toujours visibles à l'écran (1ère/dernière colonne près des bords) =====
+   L'infobulle est centrée sur la boule par défaut ; si elle sortirait de la fenêtre
+   (colonne de gauche ou de droite), --tip-shift la ramène à l'intérieur. */
+  document.addEventListener("mouseover", (e) => {
+    const el = e.target && e.target.closest ? e.target.closest("[data-tip]") : null;
+    if (document._tipPrev && document._tipPrev !== el) document._tipPrev.style.removeProperty("--tip-shift");
+    if (!el) { document._tipPrev = null; return; }
+    document._tipPrev = el;
+    // mesurer l'infobulle avec ses vrais styles (élément fantôme invisible)
+    const m = document.createElement("div");
+    m.textContent = el.getAttribute("data-tip");
+    m.style.cssText = "position:fixed; top:-9999px; left:-9999px; visibility:hidden; white-space:nowrap; max-width:340px; font-size:12px; font-weight:500; line-height:1.4; padding:6px 10px; border:1px solid #48b0f8; border-radius:6px;";
+    document.body.appendChild(m);
+    const w = m.offsetWidth;
+    document.body.removeChild(m);
+    // position du bord gauche de l'infobulle si elle restait centrée
+    const r = el.getBoundingClientRect();
+    const M = 8;   // marge de sécurité avec le bord de la fenêtre
+    const left = r.left + r.width / 2 - w / 2;
+    let shift = 0;
+    if (left < M) shift = M - left;
+    else if (left + w > window.innerWidth - M) shift = (window.innerWidth - M) - (left + w);
+    if (shift) el.style.setProperty("--tip-shift", shift + "px");
+    else el.style.removeProperty("--tip-shift");
+  });
+
+renderStats();
+
+/* ===== COMPTEURS À JOUR : le dernier tirage connu est compté dans les Statistiques =====
+   L'archive FDJ (source des compteurs) a quelques jours de retard : un numéro sorti au
+   dernier tirage (ex. le 7 le 21/10) n'y est pas encore compté, alors que l'historique
+   de l'app le connaît déjà. On l'ajoute aux compteurs, une seule fois par tirage
+   (marqueur _freqDk sur STATS_DATA, remis à zéro à chaque actualisation de l'archive). */
+function majFreqAvecTirageRecent() {
+  try {
+    if (typeof STATS_DATA === "undefined" || !STATS_DATA || !Array.isArray(STATS_DATA.history) || !STATS_DATA.history.length) return;
+    const dk = dateKeyDe(DERNIER_TIRAGE.date);
+    if (!dk || STATS_DATA._freqDk === dk) return;                       // déjà compté
+    if (STATS_DATA.history.some((h) => h.date === dk)) {                // l'archive l'a déjà intégré
+      STATS_DATA._freqDk = dk; return;
+    }
+    for (const n of DERNIER_TIRAGE.numeros) {
+      const e = FREQ_NUMS.find((x) => x.n === n);
+      if (e) e.s++;   // présent dans le top 20 : son compteur augmente
+    }
+    const ec = FREQ_CHANCE.find((x) => x.n === DERNIER_TIRAGE.chance);
+    if (ec) ec.s++;
+    FREQ_NUMS.sort((a, b) => b.s - a.s || a.n - b.n);
+    FREQ_CHANCE.sort((a, b) => b.s - a.s || a.n - b.n);
+    STATS_DATA._freqDk = dk;
+    if (typeof renderStats === "function") renderStats();
+  } catch (e) { /* pas de stats exploitable : compteurs inchangés */ }
+}
+/* ===== PERSISTANCE + ACTUALISATION DES STATISTIQUES (stats-freq.json) ===== */
+(async () => {
+  if (!(isElectron && window.statsAPI)) return;
+  try {
+    const saved = await window.statsAPI.load();
+    if (saved && Array.isArray(saved.freqNums) && saved.freqNums.length) {
+      FREQ_NUMS = saved.freqNums;
+      FREQ_CHANCE = saved.freqChance || FREQ_CHANCE;
+      STATS_DATA = saved;
+      if (saved.date) $("#statsSub").textContent = "Nombre de sorties par numéro sur l'année glissante (mise à jour : " + saved.date + ")";
+      majFreqAvecTirageRecent();   // le dernier tirage connu complète les compteurs de l'archive (en retard)
+      renderStats(); TIRAGES_PAR_DATE = construitTiragesParDate();
+      if (typeof renderCreate === "function") renderCreate();   // stats arrivées : les infobulles de la grille se rafraîchissent
+      if (typeof renderBets === "function") renderBets();   // historique arrivé : re-rendu des halos
+      if (typeof rappelGains === "function") rappelGains(); // (5) rappel des gains à saisir
+    }
+  } catch (e) { /* pas de stats sauvegardées : valeurs par défaut */ }
+})();
+
+$("#btnStatsRefresh").addEventListener("click", async () => {
+  const btn = $("#btnStatsRefresh");
+  if (btn.disabled) return;
+  btn.disabled = true; btn.classList.add("loading");
+  try {
+    if (!(isElectron && window.statsAPI)) {
+      throw new Error("L'actualisation des statistiques nécessite la mise à jour de main.js et preload.js.");
+    }
+    const r = await window.statsAPI.fetchFreq();
+    if (!r || !Array.isArray(r.freqNums) || r.freqNums.length < 20) throw new Error("données de fréquences invalides");
+    FREQ_NUMS = r.freqNums;
+    FREQ_CHANCE = r.freqChance;
+    STATS_DATA = r;
+    $("#statsSub").textContent = "Nombre de sorties par numéro sur l'année glissante (mise à jour : " + r.date + ")";
+    renderStats(); TIRAGES_PAR_DATE = construitTiragesParDate(); renderBets();   // halos recalculés immédiatement
+    if (typeof renderCreate === "function") renderCreate();   // et infobulles de la grille rafraîchies avec les nouvelles stats
+    if (window.statsAPI.save) window.statsAPI.save(r);   // mémorisées pour la prochaine ouverture
+    showToast("Statistiques recalculées sur les " + r.nbTirages + " tirages des 12 derniers mois ✓");
+  } catch (e) {
+    alert("Impossible de recalculer les statistiques.\n\nVérifiez votre connexion Internet, ou les archives de la FDJ ont peut-être changé de format.\n\nDétail : " + e.message);
+  }
+  btn.disabled = false; btn.classList.remove("loading");
+});
+
+/* ================= MISES & GAINS ================= */
+/* ===== SÉLECTEUR DE DATE (format interne yyyy-mm-dd -> affichage dd/mm/yyyy) ===== */
+const toISO = (d) => {   // Date -> "2026-10-18" pour l'input type="date"
+  const p = (x) => String(x).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+};
+const dateDuChamp = () => {   // valeur de l'input -> "18/10/2026" (format de l'app)
+  const v = $("#fDate").value;   // "2026-10-18"
+  if (!v) return new Date().toLocaleDateString("fr-FR");
+  const [y, m, d] = v.split("-");
+  return d + "/" + m + "/" + y;
+};
+/* ===== DATE PICKER : calé sur le PROCHAIN tirage (lundi / mercredi / samedi) =====
+   Si aujourd'hui est un jour de tirage, c'est aujourd'hui (un tirage joué le jour même
+   compte pour ce soir). Sinon on avance jusqu'au prochain lundi / mercredi / samedi.
+   Si le prochain tirage annoncé par la FDJ (DERNIER_TIRAGE.prochain) est encore
+   à venir ET dans les 7 prochains jours, sa date fait foi (gère les jours fériés). */
+function dateProchainTirage() {
+  const joursTirage = [1, 3, 6];   // 1=lundi, 3=mercredi, 6=samedi
+  const maintenant = new Date();
+  // 1) date annoncée par la FDJ : prioritaire si elle est passée ET dans les 7 jours
+  try {
+    const dk = dateKeyDe(DERNIER_TIRAGE.prochain && DERNIER_TIRAGE.prochain.date);
+    if (dk) {
+      const [j, m, a] = dk.split("/");
+      const d = new Date(+a, +m - 1, +j);
+      const diff = (d - new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate())) / 86400000;
+      if (diff >= 0 && diff <= 7) return d;
+    }
+  } catch (e) { /* annonce absente : calcul local */ }
+  // 2) calcul local : aujourd'hui si jour de tirage (tirage pas encore eu lieu), sinon le prochain l/m/s
+  // Après ~20 h 05 (heure du tirage), le tirage du jour n'est plus jouable : on saute au suivant.
+  const tirageDuJourPasse = joursTirage.includes(maintenant.getDay()) &&
+    (maintenant.getHours() > 20 || (maintenant.getHours() === 20 && maintenant.getMinutes() >= 5));
+  const d = new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate());
+  if (tirageDuJourPasse) d.setDate(d.getDate() + 1);
+  for (let i = 0; i < 7; i++) {
+    if (joursTirage.includes(d.getDay())) return d;
+    d.setDate(d.getDate() + 1);
+  }
+  return new Date();   // imprévu : aujourd'hui par défaut
+}
+/* Calendrier de la Mise express : PROCHAIN TIRAGE par défaut (lundi / mercredi /
+   samedi, ou date annoncée par la FDJ si elle est à venir). L'utilisateur reste libre
+   de choisir n'importe quelle date (tirages exceptionnels inclus, ex. St-Valentin
+   un mardi). Le contrôle ~20 h 05 reste appliqué à l'enregistrement : un tirage
+   déjà réalisé est refusé. */
+const majDateProchainTirage = () => { $("#fDate").value = toISO(dateProchainTirage()); };
+majDateProchainTirage();
+if (typeof renderCreate === "function") renderCreate();   // date du prochain tirage désormais connue : le libellé du bouton se met à jour
+/* ===== SAISIE EN CHAMPS RONDS : passage automatique au champ suivant ===== */
+const NUM_FIELDS = ["#fN1", "#fN2", "#fN3", "#fN4", "#fN5", "#fChance"].map((s) => $(s));
+/* bouton 🧹 Effacer : actif uniquement si au moins un champ rond est rempli */
+const grilleSaisieComplete = () => NUM_FIELDS.every((f) => f.value !== "");   /* 5 numéros + N° Chance */
+/* 🧹 Effacer actif dès qu'un champ est rempli ; 🎲 Ajouter la mise actif seulement si la grille est complète */
+let GRILLE_EXPRESS_COMPLETE = false;   /* état au rendu précédent : le pop ne joue qu'au passage incomplète -> complète */
+const majBtnEffacer = () => {
+  const rempli = NUM_FIELDS.some((f) => f.value !== "");
+  $("#btnClearBet").disabled = !rempli;
+  const complete = grilleSaisieComplete();
+  $("#btnAddBet").disabled = !complete;
+  $("#btnBetPdf").disabled = !complete;
+  /* plus d'infobulle sur les boutons de la Mise express (supprimées à la demande) */
+  if (complete && !GRILLE_EXPRESS_COMPLETE) { popBoulesExpress(); toastTicket(1, "btnBetPdf"); }   /* dès la saisie de la boule chance : pop + rappel ticket */
+  GRILLE_EXPRESS_COMPLETE = complete;
+};
+/* pop successif des 6 boules, même rythme que le Générateur (0,05 s d'écart) */
+function popBoulesExpress() {
+  NUM_FIELDS.forEach((f, i) => {
+    f.classList.remove("pop");
+    void f.offsetWidth;   /* réinitialise l'animation */
+    f.style.animationDelay = (i * 0.05) + "s";
+    f.classList.add("pop");
+  });
+  setTimeout(() => NUM_FIELDS.forEach((f) => { f.classList.remove("pop"); f.style.animationDelay = ""; }), 900);
+}
+majBtnEffacer();
+/* champ rempli : il prend l'apparence d'une boule ( bleu ou rouge pour la Chance ) */
+const majAspectRond = (inp) => inp.classList.toggle("filled", inp.value !== "");
+NUM_FIELDS.forEach((inp, i) => {
+  inp.addEventListener("input", () => {
+    // on ne garde que les chiffres
+    inp.value = inp.value.replace(/[^\d]/g, "");
+    // N° Chance : de 1 à 10 ; on garde le premier chiffre si la combinaison est impossible (ex. 12 -> 1)
+    if (inp.id === "fChance" && inp.value.length === 2 && +inp.value > 10) {
+      inp.value = inp.value[0]; majAspectRond(inp);
+      showToast("⚠ Le N° Chance va de 1 à 10");
+    }
+    majAspectRond(inp);
+    majBtnEffacer();
+    // anti-doublon : un numéro déjà saisi dans un autre champ est refusé
+    // (on ne contrôle que les 5 numéros ; le N° Chance est indépendant)
+    // Contrôle uniquement sur une saisie "finale" : 2 chiffres (ex. 04, 42) ou 1 chiffre >= 5
+    // (ex. 7). Un "4" seul peut encore devenir 42 : on ne bloque pas à ce stade,
+    // le contrôle final du bouton « Ajouter la mise » rattrape les doublons restants.
+    const saisieFinale = inp.value.length === 2 || +inp.value >= 5;
+    if (inp.id !== "fChance" && saisieFinale &&
+        NUM_FIELDS.slice(0, 5).some((f, k) => k !== i && f.value !== "" && +f.value === +inp.value)) {
+      const num = inp.value;
+      inp.value = ""; majAspectRond(inp); majBtnEffacer();
+      showToast("⚠ Le numéro " + num + " est déjà dans votre grille : saisie refusée");
+      return;
+    }
+    // auto-avance : numéro complet à 2 chiffres, ou 1 chiffre >= 5 (ex. 7 : pas de "7x" possible)
+    const next = NUM_FIELDS[i + 1];
+    if (next) {
+      if (inp.value.length === 2 || (inp.id !== "fChance" && +inp.value >= 5)) next.focus();
+    }
+  });
+  inp.addEventListener("keydown", (e) => {
+    const next = NUM_FIELDS[i + 1], prev = NUM_FIELDS[i - 1];
+    if (e.key === "Enter" && next) { e.preventDefault(); next.focus(); }
+    if ((e.key === "Backspace" || e.key === "ArrowLeft") && !inp.value && prev) { e.preventDefault(); prev.focus(); }
+  });
+  // coller "3,7,19,34,41 4" répartit les valeurs dans tous les champs
+  inp.addEventListener("paste", (e) => {
+    const txt = (e.clipboardData || window.clipboardData).getData("text");
+    const parts = txt.split(/[\s,;+-]+/).map(Number).filter((x) => x >= 1);
+    if (parts.length < 5) return;   // collage normal si ce n'est pas une grille
+    e.preventDefault();
+    for (let k = 0; k < 5; k++) NUM_FIELDS[k].value = parts[k] > 49 ? "" : parts[k];
+    NUM_FIELDS[5].value = parts[5] > 0 && parts[5] <= 10 ? parts[5] : "";
+    NUM_FIELDS.forEach(majAspectRond);
+    majBtnEffacer();
+    NUM_FIELDS[5].focus();
+  });
+});
+$("#btnAddBet").addEventListener("click", () => {
+  let nums = NUM_FIELDS.slice(0, 5).map((f) => +f.value).filter((x) => x >= 1 && x <= 49);
+  const chance = +$("#fChance").value;
+  if (nums.length !== 5 || NUM_FIELDS.slice(0, 5).some((f) => !f.value) || chance < 1 || chance > 10) { showToast("⚠ Grille invalide : numéros entre 1 et 49, sans doublon"); return; }
+  if (new Set(nums).size !== 5) { showToast("⚠ Grille invalide : un numéro est répété."); return; }
+  nums = nums.sort((a,b)=>a-b);
+  const dMise = dateDuChamp();
+  // TIRAGE DÉJÀ PASSÉ : jour de tirage (lundi / mercredi / samedi) au-delà de ~20 h 05 -> plus jouable
+  const maintenant = new Date();
+  const [jSel, mSel, aSel] = dMise.split("/").map(Number);
+  const dSel = new Date(aSel, mSel - 1, jSel);
+  const jourDeTirage = [1, 3, 6].includes(dSel.getDay());
+  const memeJourEtTard = dSel.getFullYear() === maintenant.getFullYear() &&
+    dSel.getMonth() === maintenant.getMonth() && dSel.getDate() === maintenant.getDate() &&
+    (maintenant.getHours() > 20 || (maintenant.getHours() === 20 && maintenant.getMinutes() >= 5));
+  if (jourDeTirage && (dSel < new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate()) || memeJourEtTard)) {
+    showToast("⚠ Ce tirage a déjà eu lieu : impossible d'enregistrer une mise pour cette date");
+    return;   // la date choisie est conservée : l'utilisateur peut la modifier lui-même
+  }
+  if (estDoublon(dMise, nums, chance)) { showToast("⚠ Cette grille est déjà enregistrée à cette date (doublon)."); return; }
+  bets.push({ id: ++uid, date: dMise, nums, chance, mise: PRIX_GRILLE, gain: 0, rang: null });
+    save(); NUM_FIELDS.forEach((f) => { f.value = ""; majAspectRond(f); }); majBtnEffacer(); renderBets();
+  showToast("Mise enregistrée avec succès ✓");
+  NUM_FIELDS[0].focus();   // prêt pour une nouvelle saisie
+});
+/* ===== EFFACER LES CHAMPS DE LA MISE EXPRESS ===== */
+$("#btnClearBet").addEventListener("click", () => {
+  NUM_FIELDS.forEach((f) => { f.value = ""; majAspectRond(f); });
+  majBtnEffacer();
+  majDateProchainTirage();   // 🧹 : date recalée sur le prochain tirage
+  showToast("Champs effacés ✓");
+  NUM_FIELDS[0].focus();
+});
+
+/* ===== EXPORT DES MISES (sauvegarde manuelle) ===== */
+$("#btnExport").addEventListener("click", async () => {
+  if (!bets.length) { alert("Aucune mise à exporter."); return; }
+  if (!(isElectron && window.betsAPI && window.betsAPI.export)) {
+    alert("L'export nécessite la mise à jour de main.js et preload.js.");
+    return;
+  }
+  const fp = await window.betsAPI.export(bets).catch((e) => { alert("Erreur pendant l'export :\n\n" + (e.message || e)); return null; });
+  if (fp) showToast("Mises exportées : " + bets.length + " - sauvegarde créée ✓");
+});
+
+/* ===== RESTAURATION DE SAUVEGARDE ===== */
+$("#btnRestore").addEventListener("click", async () => {
+  if (!(isElectron && window.betsAPI && window.betsAPI.import)) {
+    alert("La restauration nécessite la mise à jour de main.js et preload.js.");
+    return;
+  }
+  if (bets.length && !confirm("Des mises sont déjà présentes.\nLa restauration ajoutera uniquement les mises manquantes (les doublons sont ignorés).\n\nContinuer ?")) return;
+  const r = await window.betsAPI.import().catch((e) => ({ error: "Erreur pendant la restauration :\n\n" + (e.message || e) }));
+  if (!r) return;
+  if (r.error) { alert(r.error); return; }
+  let ok = 0, ko = 0;
+  for (const b of r.content) {
+    const nums = Array.isArray(b.nums) ? b.nums.map(Number).filter((x) => x >= 1 && x <= 49).sort((a, c) => a - c) : [];
+    const chance = +b.chance;
+    if (nums.length !== 5 || chance < 1 || chance > 10) { ko++; continue; }
+    if (estDoublon(b.date, nums, chance)) continue;   // déjà présente : ignorée
+    bets.push({ id: ++uid, date: b.date || "", nums, chance,
+      mise: +b.mise || PRIX_GRILLE, gain: +b.gain || 0, rang: b.rang ?? null });
+    ok++;
+  }
+  if (ok || ko) { save(); renderBets(); }
+  showToast(ok ? "Restauration : " + ok + " mise" + (ok > 1 ? "s" : "") + " ajoutée" + (ok > 1 ? "s" : "") + (ko ? " · " + ko + " invalide" + (ko > 1 ? "s" : "") : "") + " ✓"
+               : "Aucune nouvelle mise à restaurer ✓");
+});
+
+function setGain(id, gain, rang) { const raw = String(gain); const g = parseFloat(raw.replace(",", ".")) || 0; bets = bets.map((b) => (b.id === id ? { ...b, gain: g, rang: rang ?? null } : b)); save(); renderBets(); showToast("Gain enregistré : " + fmt(g) + " € (saisie : « " + (raw || "vide") + " » — rang " + (rang ?? "—") + ")"); }
+/* ===== PRÉ-REMPLISSAGE AUTOMATIQUE DU RANG =====
+   Si la date de la mise correspond à un tirage connu, le rang se calcule tout seul.
+   Tirage connu : le rang calculé FAIT FOI (même si un gain a déjà été saisi à la main),
+   car l'app connaît les vrais numéros + N° Chance du tirage (source d'erreur humaine :
+   choisir « 2 numéros » en oubliant que le N° Chance était trouvé -> Rang 7, pas 8).
+   Grille perdante au tirage principal : on n'efface le rang saisi que s'il n'y a pas de gain
+   (un gain peut venir du 2nd tirage : dans ce cas le rang manuel est conservé). */
+function preremplirRang(b, t) {
+  if (!t) return b;                                   // date inconnue : on ne touche à rien
+  const r = rangDe(b.nums, b.chance, t);
+  if (r !== null) return b.rang === r ? b : { ...b, rang: r };   // rang calculé : prioritaire
+  if (b.gain === 0 && b.rang !== null) return { ...b, rang: null };   // grille perdante
+  return b;
+}
+/* modale de confirmation (même style que la modale de gain, sans champ de saisie) */
+function askConfirm(title, message) {
+  return new Promise((resolve) => {
+    const ov = document.getElementById("confirmOverlay");
+    document.getElementById("confirmTitle").textContent = title;
+    document.getElementById("confirmMsg").textContent = message;
+    ov.classList.add("open");
+    const done = (val) => {
+      ov.classList.remove("open");
+      document.getElementById("confirmOk").onclick = document.getElementById("confirmCancel").onclick = null;
+      resolve(val);
+    };
+    document.getElementById("confirmOk").onclick = () => done(true);
+    document.getElementById("confirmCancel").onclick = () => done(false);
+  });
+}
+function delBet(id) {
+  askConfirm("Supprimer la mise", "Êtes-vous certain de vouloir supprimer cette mise ?")
+    .then((ok) => { if (ok) { bets = bets.filter((b) => b.id !== id); save(); renderBets(); } });
+}
+window.setGain = setGain; window.delBet = delBet; window.RANGS = RANGS;
+
+/* ================= ANALYSE : pourcentages, camembert, répartition ================= */
+function renderAnalyse() {
+  const n = bets.length;
+  const gagnants = bets.filter((b) => b.gain > 0);
+  const perdants = n - gagnants.length;
+  const tM = bets.reduce((a, b) => a + b.mise, 0);
+  const tG = bets.reduce((a, b) => a + b.gain, 0);
+  const pctG = n ? Math.round(1000 * gagnants.length / n) / 10 : 0;
+  const pctP = n ? Math.round(1000 * perdants / n) / 10 : 0;
+  const roi = tM ? Math.round(10 * 100 * tG / tM) / 10 : 0;
+
+  // Camembert (donut SVG)
+  const donut = $("#anDonut");
+  if (!n) {
+    donut.innerHTML = '<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#8a8a8a; font-size:12px; text-align:center">Aucune mise<br>à analyser</div>';
+  } else {
+    const C = 2 * Math.PI * 60; // rayon 60
+    const pg = C * gagnants.length / n;
+    const svg = `<svg viewBox="0 0 150 150" style="transform:rotate(-90deg)">
+      <circle cx="75" cy="75" r="60" fill="none" stroke="#e0e6ef" stroke-width="26"/>
+      <circle cx="75" cy="75" r="60" fill="none" stroke="#17a54a" stroke-width="26"
+        stroke-dasharray="${pg.toFixed(1)} ${C.toFixed(1)}" stroke-linecap="butt"/>
+    </svg>`;
+    const centre = `<div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center">
+      <div style="font-size:24px; font-weight:700; color:#0a7a0a">${pctG} %</div>
+      <div style="font-size:11px; color:#5c5c5c">gagnants</div></div>`;
+    donut.innerHTML = svg + centre;
+  }
+
+  // KPI
+  const kpi = (label, val, color) => `<div style="border:1px solid #3a4a66; border-radius:4px; padding:8px 12px"><div style="font-size:12px; color:#5c5c5c">${label}</div>
+    <div style="font-size:20px; font-weight:700; ${color ? "color:" + color : ""}">${val}</div></div>`;
+  const best = gagnants.length ? Math.max(...gagnants.map((b) => b.gain)) : 0;
+  $("#anKpis").innerHTML =
+    `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:4px 20px">` +
+    kpi("Gagnants", gagnants.length + " / " + n + "  (" + pctG + " %)", "#0a7a0a") +
+    kpi("Perdus", perdants + "  (" + pctP + " %)", "#c42b1c") +
+    kpi("Gain moyen / gagnant", gagnants.length ? fmt(tG / gagnants.length) + " €" : "—") +
+    kpi("Meilleur gain", best ? fmt(best) + " €" : "—") +
+    kpi("Taux de retour (ROI)", n ? roi + " %" : "—") +
+    `</div>`;
+
+  // Répartition des gains : pastilles compactes (compteur + total, couleur selon le montant)
+  const buckets = [
+    { label: "Grille remboursée (2,20 €)", color: "#1565c0", f: (b) => b.gain === PRIX_GRILLE },
+    { label: "Petit gain (2,20 à 15 €)", color: "#e03424", f: (b) => b.gain > PRIX_GRILLE && b.gain <= 15 },
+    { label: "Gain moyen (15 à 100 €)", color: "#f57c00", f: (b) => b.gain > 15 && b.gain <= 100 },
+    { label: "Gros gain (> 100 €)", color: "#0a7a0a", f: (b) => b.gain > 100 }
+  ];
+  $("#anBars").innerHTML =
+    `<h3 style="margin:18px 0 8px; font-size:15px">Répartition des gains</h3>` +
+    `<div style="display:flex; gap:10px; flex-wrap:wrap">` +
+    buckets.map((bk) => {
+      const sel = gagnants.filter(bk.f);
+      const cnt = sel.length;
+      const tot = sel.reduce((a, b) => a + b.gain, 0);
+      // fond de couleur vive, texte blanc pour la lisibilité max en clair ET en sombre
+      return `<div class="an-bucket" data-tip="${bk.label}" style="flex:1; min-width:150px; border-radius:8px; padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; background:${bk.color}; box-shadow:0 2px 6px ${bk.color}55">
+        <div style="flex:none; display:flex; align-items:baseline; gap:4px">
+          <span style="font-size:24px; font-weight:800; color:#fff; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.25)">${cnt}</span>
+          <span style="font-size:12px; font-weight:600; color:#fff; opacity:.9">${cnt > 1 ? "gains" : "gain"}</span>
+        </div>
+        <div style="flex:1; min-width:0; font-size:12px; line-height:1.35; text-align:right; color:#fff">
+          <div style="font-weight:600; text-shadow:0 1px 2px rgba(0,0,0,.25); overflow-wrap:break-word">${bk.label}</div>
+          <div style="opacity:.92">${cnt ? "Total : <b>" + fmt(tot) + " €</b>" : "—"}</div>
+        </div>
+      </div>`;
+    }).join("") + `</div>`;
+
+  // Évolution du solde : sparkline ultra-compacte, taille FIXE.
+  // Le SVG a un viewBox figé : aucune évolution future (2 ou 200 mises) ne changera
+  // sa taille affichée -> jamais de scroll, hauteur verrouillée.
+  const curve = $("#anCurve");
+  if (!n) { curve.innerHTML = ""; return; }
+  const dISOan = (d) => { const m = String(d || "").match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + m[2] + m[1] : "00000000"; };
+  const chrono = [...bets].sort((a, b) => dISOan(a.date).localeCompare(dISOan(b.date)) || a.id - b.id);
+  let cum = 0;
+  const rows = chrono.map((b) => ({ ...b, solde: (cum += b.gain - b.mise) }));
+  const vals = rows.map((r) => r.solde);
+  const max = Math.max(0, ...vals), min = Math.min(0, ...vals);
+  const W = 880, H = 130, mG = 52, mD = 58, mH = 16, mB = 16;   // viewBox FIGE : marges larges pour étiquettes jamais tronquées
+  const iw = W - mG - mD, ih = H - mH - mB;
+  const x = (i) => mG + iw * (n === 1 ? 0.5 : i / (n - 1));
+  const y = (v) => mH + ih - ih * ((v - min) / (max - min || 1));
+  const fmtC = (v) => (v >= 0 ? "+" : "") + fmt(v).replace(",00", "") + " €";
+  const fin = vals[n - 1];
+  const basSolde = rows.reduce((m, r) => (r.solde < m.solde ? r : m), rows[0]);
+  const gainMax = rows.reduce((m, r) => (r.gain > m.gain ? r : m), rows[0]);
+  const iMax = rows.indexOf(rows.reduce((m, r) => (r.solde > m.solde ? r : m), rows[0]));
+  const iMin = rows.indexOf(basSolde);
+  const poly = vals.map((v, i) => x(i).toFixed(1) + "," + y(v).toFixed(1)).join(" ");
+  const pts = rows.map((r, i) =>
+    `<circle cx="${x(i).toFixed(1)}" cy="${y(r.solde).toFixed(1)}" r="2.5" fill="${r.solde >= 0 ? "#17a54a" : "#e03424"}"></circle>` +
+    `<circle cx="${x(i).toFixed(1)}" cy="${y(r.solde).toFixed(1)}" r="10" fill="transparent" data-t="${r.date} · grille ${r.nums.join(", ")} + ${r.chance}\nGain : ${fmt(r.gain)} € · Solde : ${fmtC(r.solde)}"></circle>`).join("");
+  curve.innerHTML =
+    `<h3 style="margin:18px 0 4px; font-size:15px">Évolution du solde (survolez les points)</h3>` +
+    `<div style="display:flex; align-items:center; gap:8px">` +
+    `<svg viewBox="0 0 ${W} ${H}" style="flex:1; height:130px; max-width:100%; display:block">` +
+      `<line x1="${mG}" y1="${y(0).toFixed(1)}" x2="${W - mD + 14}" y2="${y(0).toFixed(1)}" stroke="#c0c8d8" stroke-dasharray="4 4" stroke-width="1"/>` +
+      `<text x="${mG - 6}" y="${y(0) + 4}" text-anchor="end" font-size="10" fill="#8a8a8a">0 €</text>` +
+      `<polyline points="${poly}" fill="none" stroke="#0067c0" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>` + pts +
+      // repères min / max
+      `<circle cx="${x(iMax).toFixed(1)}" cy="${y(rows[iMax].solde).toFixed(1)}" r="4" fill="#17a54a" stroke="#fff" stroke-width="1.5" data-t="Meilleur solde : ${fmtC(rows[iMax].solde)} (${rows[iMax].date})"></circle>` +
+      `<text x="${(x(iMax) + (iMax > n * 0.7 ? -6 : 6)).toFixed(1)}" y="${y(rows[iMax].solde) - 6}" text-anchor="${iMax > n * 0.7 ? "end" : "start"}" font-size="10" font-weight="600" fill="#0a7a0a">${fmtC(rows[iMax].solde)}</text>` +
+      `<circle cx="${x(iMin).toFixed(1)}" cy="${y(basSolde.solde).toFixed(1)}" r="4" fill="#e03424" stroke="#fff" stroke-width="1.5" data-t="Solde le plus bas : ${fmtC(basSolde.solde)} (${basSolde.date})"></circle>` +
+      `<text x="${(x(iMin) + (iMin > n * 0.7 ? -6 : 6)).toFixed(1)}" y="${y(basSolde.solde) + 14}" text-anchor="${iMin > n * 0.7 ? "end" : "start"}" font-size="10" font-weight="600" fill="#c42b1c">${fmtC(basSolde.solde)}</text>` +
+      // point final + valeur
+      `<circle cx="${x(n - 1).toFixed(1)}" cy="${y(fin).toFixed(1)}" r="4.5" fill="${fin >= 0 ? "#17a54a" : "#e03424"}" stroke="#fff" stroke-width="1.5" data-t="Solde final : ${fmtC(fin)} (${rows[n - 1].date})"></circle>` +
+      `<text x="${W - mD + 6}" y="${y(fin) + 3.5}" text-anchor="start" font-size="11" font-weight="700" fill="${fin >= 0 ? "#0a7a0a" : "#c42b1c"}">${fmtC(fin)}</text>` +
+    `</svg>` +
+    `</div>` +
+    `<div style="font-size:11px; color:#8a8a8a; margin-top:2px">${rows[0].date} → ${rows[n - 1].date} · ${n} mise${n > 1 ? "s" : ""}</div>` +
+    `<div style="font-size:12px; color:#5c5c5c; margin-top:6px">Solde final : ` +
+    `<b style="color:${fin >= 0 ? "#0a7a0a" : "#c42b1c"}">${fin >= 0 ? "+" : ""}${fmt(fin)} €</b>` +
+    ` · Meilleur gain : <b class="best-gain">${fmt(gainMax.gain)} €</b> (${gainMax.date})` +
+    ` · Solde le plus bas : <b style="color:#c42b1c">${fmtC(basSolde.solde)}</b> (${basSolde.date})</div>`;
+  lierTipsCourbe();   // infobulles maison branchées sur les points tout juste créés
+}
+
+let TIRAGES_PAR_DATE = construitTiragesParDate();   // recalculé en tête de renderBets : jamais périmé
+/* ===== (6) TRI DU TABLEAU MISES PAR COLONNE ===== */
+let triMises = { col: "date", dir: "desc" };   // défaut : date du plus récent au plus ancien
+["thDate", "thMise", "thGain"].forEach((id) => {
+  document.getElementById(id).addEventListener("click", () => {
+    const col = id === "thDate" ? "date" : (id === "thMise" ? "mise" : "gain");
+    if (triMises.col === col) triMises.dir = triMises.dir === "asc" ? "desc" : "asc";
+    else triMises = { col, dir: col === "date" ? "desc" : "desc" };
+    renderBets();
+  });
+});
+/* ===== (5) RAPPEL DE SAISIE DES GAINS ===== */
+let rappelFait = false;
+function rappelGains() {
+  if (rappelFait) return;
+  const aSaisir = bets.filter((b) => b.rang != null && b.gain === 0);
+  if (aSaisir.length) {
+    rappelFait = true;
+    showToast("💰 Rappel : " + aSaisir.length + " gain" + (aSaisir.length > 1 ? "s" : "") + " à saisir (onglet Mises & Gains, bouton 💰)");
+  }
+}
+function renderBets() {
+  TIRAGES_PAR_DATE = construitTiragesParDate();   // toujours à jour avant d'afficher
+  // pré-remplissage automatique du rang : la date de la mise correspond-elle à un tirage connu ?
+  let corriges = 0;
+  bets = bets.map((b) => {
+    const nb = preremplirRang(b, TIRAGES_PAR_DATE[b.date] || null);
+    if (nb !== b && b.gain > 0) corriges++;   // mise avec gain déjà saisi dont le rang a été recalculé
+    return nb;
+  });
+  if (corriges) { save(); showToast("Rang recalculé d'après le tirage officiel : " + corriges + " mise" + (corriges > 1 ? "s" : "") + " corrigée" + (corriges > 1 ? "s" : "") + " ✓"); }
+  // affichage trié par DATE RÉELLE (du plus récent au plus ancien),
+  // fiable même si une mise ancienne est saisie a posteriori
+  const dISO = (d) => { const m = String(d || "").match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + m[2] + m[1] : "00000000"; };
+  const aff = [...bets].sort((a, b) => {
+    let c = 0;
+    if (triMises.col === "date") c = dISO(a.date).localeCompare(dISO(b.date));
+    else if (triMises.col === "mise") c = a.mise - b.mise;
+    else c = a.gain - b.gain;
+    if (c === 0) c = a.id - b.id;
+    return triMises.dir === "asc" ? c : -c;
+  });
+  // flèches de tri dans les en-têtes cliquables
+  const fleche = (col) => triMises.col === col ? (triMises.dir === "asc" ? " ▲" : " ▼") : "";
+  $("#thDate").textContent = "Date" + fleche("date");
+  $("#thMise").textContent = "Mise" + fleche("mise");
+  $("#thGain").textContent = "Gain (€)" + fleche("gain");
+  const tM = bets.reduce((a, b) => a + b.mise, 0);
+  const tG = bets.reduce((a, b) => a + b.gain, 0);
+  const solde = tG - tM;
+  $("#kMise").textContent = fmt(tM) + " €";
+  $("#kGain").textContent = fmt(tG) + " €";
+  $("#kSolde").textContent = (solde > 0 ? "📈 " : solde < 0 ? "📉 " : "") + (solde >= 0 ? "+" : "") + fmt(solde) + " €";   /* tendance visible d'un coup d'œil */
+  $("#kSolde").className = "value " + (solde >= 0 ? "green" : "red");
+  $("#kCount").textContent = bets.length;
+  $("#betRows").innerHTML = aff.map((b) => `
+    <tr>
+      <td>${b.date}</td>
+      <td><div style="display:flex; gap:4px; align-items:center">${(() => { const t = TIRAGES_PAR_DATE[b.date] || null; return b.nums.map((n) => ballHTML(n, "ball-xs" + (t && t.numeros.includes(n) ? " winner" : ""))).join("") + ballHTML(b.chance, "chance ball-xs" + (t && t.chance === b.chance ? " winner" : "")); })()}</div></td>
+      <td>${fmt(b.mise)}</td>
+      <td><div style="display:flex; gap:4px; align-items:center">
+        <select onchange="const v=this.value; if(!v){setGain(${b.id},0,null)} else {setGainModal(${b.id},v)}">
+          <option value="">—</option>
+          ${Object.entries(RANGS).map(([k, v]) => `<option value="${k}" ${b.rang == k ? "selected" : ""}>Rang ${k} : ${v}</option>`).join("")}
+        </select>
+        ${b.rang != null && b.gain === 0 ? `<button onclick="setGainModal(${b.id}, ${b.rang})" data-tip="Saisir le gain du rang ${b.rang}" style="background:none;border:none;cursor:pointer;font-size:15px;flex:none">💶</button>` : ""}
+      </div></td>
+      <td class="gain-cell" style="${b.gain > 0 ? "color:#0a7a0a; font-weight:700" : ""}">${b.gain > 0 ? fmt(b.gain) : "-"}</td>
+      <td><button onclick="delBet(${b.id})" data-tip="Supprimer" style="background:none;border:none;color:#c42b1c;cursor:pointer;font-size:10px">❌</button></td>
+    </tr>`).join("") || `<tr><td colspan="6" style="padding:18px; text-align:center; color:#8a8a8a">Aucune mise enregistrée.</td></tr>`;
+  lierTipsFlottants();   // infobulles du tableau (❌ Supprimer, 💶 Saisir le gain...) branchées sur les lignes tout juste créées
+      // Calibration SIMPLE et ROBUSTE : nombre fixe de rangées visibles.
+  // Écran standard : 4 mises visibles - petit écran (<760px) : 3 mises visibles.
+  // Aucune mesure de position : la hauteur ne peut pas déborder de la fenêtre.
+  const wrap = document.querySelector(".bets-body-wrap");
+  if (wrap && !$("#view-mises").classList.contains("hidden")) {
+    // "Petit écran" = fenêtre basse (ou étroite) : on juge sur la HAUTEUR, pas la largeur
+    const compact = window.innerHeight < 720 || window.matchMedia("(max-width: 760px)").matches;
+    const nbRows = compact ? 2 : 3;   // rangées visibles : 2 sur petit écran, 3 sur écran standard
+    const firstRow = $("#betRows").querySelector("tr");
+    const rowH = firstRow && firstRow.offsetHeight > 10 ? firstRow.offsetHeight : (compact ? 82 : 45);
+    wrap.style.maxHeight = (nbRows * rowH + 4) + "px";
+  }
+  renderAnalyse();
+}
+renderBets();
+window.addEventListener("resize", () => {   // la fenêtre change de taille : on recadre le tableau
+  if (!$("#view-mises").classList.contains("hidden")) renderBets();
+});
+window.addEventListener("orientationchange", () => {   // rotation écran (mobile) : recalage après le pivot
+  setTimeout(() => { if (!$("#view-mises").classList.contains("hidden")) renderBets(); }, 250);
+});
+/* ===== INFOBULLES MAISON DE LA COURBE « Évolution du solde » (v2 : écouteurs DIRECTS sur les points) ===== */
+const svgTip = document.createElement("div");
+svgTip.id = "svgTip";
+document.body.appendChild(svgTip);
+function svgTipPlace(e) {
+  const r = svgTip.getBoundingClientRect();
+  let l = e.clientX + 14, tpp = e.clientY - r.height - 14;   // par défaut : à droite, au-dessus du curseur
+  if (l + r.width > window.innerWidth - 8) l = e.clientX - r.width - 14;   // bord droit : à gauche du curseur
+  if (tpp < 8) tpp = e.clientY + 18;   // trop haut : sous le curseur
+  svgTip.style.left = l + "px"; svgTip.style.top = tpp + "px";
+}
+function lierTipsFlottants() {   // tableau des mises : infobulle flottante, jamais clippée par le corps défilant
+  document.querySelectorAll("#betRows [data-tip]").forEach((c) => {
+    c.addEventListener("mouseenter", (e) => {
+      svgTip.textContent = c.getAttribute("data-tip");
+      svgTip.style.display = "block";
+      svgTipPlace(e);
+    });
+    c.addEventListener("mousemove", svgTipPlace);
+    c.addEventListener("mouseleave", () => { svgTip.style.display = "none"; });
+  });
+}
+function lierTipsCourbe() {
+  document.querySelectorAll("#anCurve [data-t]").forEach((c) => {
+    c.addEventListener("mouseenter", (e) => {
+      svgTip.textContent = c.getAttribute("data-t");
+      svgTip.style.display = "block";
+      svgTipPlace(e);
+    });
+    c.addEventListener("mousemove", svgTipPlace);
+    c.addEventListener("mouseleave", () => { svgTip.style.display = "none"; });
+  });
+}
+/* ===== HISTORIQUE : infobulle flottante par DÉLÉGATION sur #histList =====
+   Les lignes de tirage sont recréées à chaque rendu : la délégation (un seul
+   écouteur sur le conteneur) reste valable pour toujours, sans re-lier. */
+  const histTip = document.getElementById("histList");
+  histTip.addEventListener("mouseover", (e) => {
+    const el = e.target.closest("[data-tip]");
+    if (!el || !histTip.contains(el)) { svgTip.style.display = "none"; return; }
+    svgTip.textContent = el.getAttribute("data-tip");
+    svgTip.style.display = "block";
+    svgTipPlace(e);
+  });
+  histTip.addEventListener("mousemove", svgTipPlace);
+  histTip.addEventListener("mouseleave", () => { svgTip.style.display = "none"; });
+document.getElementById("year").textContent = new Date().getFullYear();
+
+</script>
+
+<div id="printZone"></div>
+
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" nonce="Am4nQBhMtLpwLUVwBjjPZw==" data-cf-beacon='{"version":"2024.11.0","token":"36b4216ae2dc4d5488c249161e71fe1e","spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
